@@ -47,3 +47,21 @@ def test_edited_approval_skips_review(monkeypatch):
     app.gate("approve", edited=True)
     assert not app.S.board.get("risk_register")
     app.S.reset(True)
+
+
+# Review cuối #3: reviewer máy (biến thể) → 400, không ký gate, không ghi review
+@pytest.mark.parametrize("who", ["Orchestrator", "c1-dev", "huddle:a1_bu", "AUTO-L3"])
+def test_gate_rejects_machine_reviewer(monkeypatch, who):
+    calls = []
+
+    class _Rec:
+        cfg = {"gate_task_types": {"G3": "build_task"}}
+
+        def record_review(self, *a, **kw):
+            calls.append(kw)
+    monkeypatch.setattr(app, "AUTONOMY", _Rec())
+    i = _at_gate("G3")
+    res = app.gate("approve", reviewer=who)
+    assert getattr(res, "status_code", None) == 400
+    assert not app.S.board.is_signed("G3") and app.S.i == i and calls == []
+    app.S.reset(True)

@@ -15,6 +15,7 @@ from jsonschema import ValidationError
 from src.agents import e1_pm
 from src.blackboard.store import Blackboard, PermissionDenied
 from src.common.config import ConfigError
+from src.governance import confirm
 from src.iso import conformance, impact, inventory
 from src.orchestrator import gate_view, team_feed
 from src.orchestrator import status as pstatus
@@ -153,6 +154,8 @@ def gate(decision: str, edited: bool = False, reviewer: str = "human"):
     st = S.steps[S.i]
     if not st.get("gate"): return JSONResponse({"error":"not at gate"}, 400)
     gid = st["gate"]
+    if decision == "approve" and not confirm.is_human(reviewer):
+        return JSONResponse({"error": f"reviewer {reviewer!r} không phải người"}, 400)
     if decision == "approve":
         S.signed[gid] = "approved"; S.board.sign(gid, by="human", via="gate_ui")
         if not edited:

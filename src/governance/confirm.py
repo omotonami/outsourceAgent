@@ -5,13 +5,18 @@ Danh sách "không phải người" (MACHINE_IDS), dựng từ nguồn sự th�
   writer của mọi zone (specs/05_blackboard.yaml) ∪ agent có spec (specs/02_agents/*.md)
   ∪ hệ thống {orchestrator, gateway, dispatcher} ∪ promote.reject_approvers (config/autonomy.yaml)
   − GATE_UI (gate_ui là kênh ký gate, xử lý riêng ở Blackboard.sign).
-Thêm: tên bắt đầu bằng 'auto' (auto-L2, auto-L3...) và '<máy>.<phụ>' (orchestrator.dispatcher) là máy.
-Với xác nhận/duyệt (is_human), GATE_UI cũng KHÔNG phải người.
+Chuẩn hoá danh tính trước khi so (_tokens): NFKC + casefold + strip, tách theo `:` `-` `_` `.` và khoảng
+trắng. Máy nếu: chuỗi token của một id máy (vd c1_dev → c1,dev) xuất hiện liên tiếp trong danh tính, hoặc
+một phần bắt đầu bằng 'auto'. Vd "Orchestrator", "c1-dev", "huddle:a1_bu", "AUTO-L3",
+"orchestrator.dispatcher" đều là máy.
+Với xác nhận/duyệt (is_human), GATE_UI (mọi biến thể: Gate-UI, gate.ui...) cũng KHÔNG phải người.
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import re
+import unicodedata
 from typing import Iterable
 
 from src.common import config
@@ -35,17 +40,37 @@ MACHINE_IDS: frozenset[str] = frozenset(
     (_zone_writers() | config.agent_ids() | SYSTEM_IDS | _reject_approvers()) - {GATE_UI})
 
 
+_SEP = re.compile(r"[\s:\-_.]+")
+
+
+def _tokens(who: object) -> tuple[str, ...]:
+    """Danh tính chuẩn hoá thành các phần: NFKC, casefold, tách theo : - _ . và khoảng trắng."""
+    w = unicodedata.normalize("NFKC", str(who or "")).casefold().strip()
+    return tuple(p for p in _SEP.split(w) if p)
+
+
+def _contains(hay: tuple[str, ...], needle: tuple[str, ...]) -> bool:
+    n = len(needle)
+    return n > 0 and any(hay[i:i + n] == needle for i in range(len(hay) - n + 1))
+
+
+_MACHINE_TOKENS: frozenset[tuple[str, ...]] = frozenset(t for t in map(_tokens, MACHINE_IDS) if t)
+_GATE_UI_TOKENS = _tokens(GATE_UI)
+
+
 def is_machine(who: object, extra: Iterable[str] = ()) -> bool:
-    """True nếu `who` là danh tính máy (agent/hệ thống/auto-*) hoặc nằm trong `extra`."""
-    w = str(who or "").strip()
-    deny = MACHINE_IDS | set(extra)
-    return w in deny or w.split(".", 1)[0] in deny or w.lower().startswith(AUTO_PREFIX)
+    """True nếu `who` (sau chuẩn hoá) chứa danh tính máy (agent/hệ thống/auto-*) hoặc thuộc `extra`."""
+    parts = _tokens(who)
+    if not parts:
+        return False
+    deny = _MACHINE_TOKENS | {t for t in map(_tokens, extra) if t}
+    return any(p.startswith(AUTO_PREFIX) for p in parts) or any(_contains(parts, d) for d in deny)
 
 
 def is_human(who: object, extra: Iterable[str] = ()) -> bool:
-    """Người thật: không rỗng, không phải máy, không phải kênh gate_ui."""
-    w = str(who or "").strip()
-    return bool(w) and w != GATE_UI and not is_machine(w, extra)
+    """Người thật: không rỗng, không phải máy, không phải kênh gate_ui (mọi biến thể)."""
+    parts = _tokens(who)
+    return bool(parts) and parts != _GATE_UI_TOKENS and not is_machine(who, extra)
 
 
 def require_human(who: object, error: type[Exception], message: str, extra: Iterable[str] = ()) -> str:

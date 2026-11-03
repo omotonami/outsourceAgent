@@ -146,7 +146,10 @@ class Autonomy:
     # ---------- dữ liệu vào ----------
     def record_review(self, agent: str, task_type: str, gate: str, reviewer: str, edited: bool = False,
                       approved: bool = True) -> dict:
-        """Ghi kết quả người duyệt ở gate cho output của cặp. CHỈ ghi log — không ký gate."""
+        """Ghi kết quả người duyệt ở gate cho output của cặp. CHỈ ghi log — không ký gate.
+        `reviewer` phải là người (governance/confirm) — máy/auto-* → AutonomyRefused, không ghi."""
+        reviewer = human.require_human(reviewer, AutonomyRefused, "reviewer '{who}' không phải người",
+                                       extra=set(self.promote_cfg.get("reject_approvers") or []) | {agent})
         e = {"ts": self._now(), "agent": agent, "task_type": task_type, "gate": gate,
              "reviewer": reviewer, "approved": bool(approved), "edited": bool(edited)}
         return jsonl.append(self.reviews_log, e)

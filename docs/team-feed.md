@@ -10,7 +10,8 @@ Người xem "team bot đang làm gì" trong một dòng thời gian. Code thu�
 | `huddle_log` | mỗi lượt nói | RESULT (actor = agent) |
 | `decision_records` | mỗi kết quả huddle | DECISION |
 | `risk_register` | còn mở và severity High/Critical | BLOCKED |
-Event lạ trong `trace_log` (vd gateway) bị bỏ qua. Hiện Dispatcher chưa phát ASSIGN — type để sẵn.
+Event lạ trong `trace_log` (vd gateway) bị bỏ qua. Dispatcher phát ASSIGN ngay trước SPAWN
+(summary `giao <task> cho <agent>`). Type là `EventType` trong `src/orchestrator/events.py` (dùng chung với Dispatcher).
 
 ## Event
 `{type, ts, actor, task_id, summary, source}` — `summary` dựng từ field whitelist, ≤ 200 ký tự.

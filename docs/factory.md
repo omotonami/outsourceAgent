@@ -7,8 +7,10 @@
    anti_jobs/forbidden · input (+untrusted) · output + zone · tools · phase/trigger/risk/model tier.
    - Tuỳ chọn: `draft_from_llm(idea)` → bản nháp nhãn `RECOMMENDATION`, `confirmed=False`
      (logic LLM ở `src/agents/factory_interviewer.py`, đi qua gateway). Người sửa rồi `confirm()`.
+   - `confirm(..., confirmed_by=<người>)` dùng `src/governance/confirm.py` (danh sách máy chung).
    - `build_spec(answers)` kiểm: id dạng `<chữ><số>_<role>`, ≥1 anti_job, phase ∈ `config/budgets.yaml`.
-2. **Scaffold** (`src/factory/scaffold.py`, không LLM) sinh:
+2. **Scaffold** (`src/factory/scaffold.py` — kế hoạch/ghi/rollback; nội dung ở `templates.py`, chèn YAML ở
+   `yaml_edit.py`; không LLM) sinh:
    `specs/02_agents/<id>.md` (Card v5 + prompt 4 module, `subordinates`, `anti_jobs`) ·
    `specs/04_schemas/<id>.in/out.json` · `src/agents/<id>.py` · `knowledge/<role>/team|personal/_template` ·
    `tests/contract/test_<id>.py`; chèn entry vào `specs/03_routing.yaml`, zone vào `specs/05_blackboard.yaml`
@@ -21,9 +23,10 @@
 
 ## Lệnh
 ```bash
-git switch -c feat/agent-<id>                         # Factory xuất ra branch → PR → người duyệt
-python -m src.factory.new --spec my_agent.yaml        # dry-run: liệt kê file sẽ ghi
-python -m src.factory.new --spec my_agent.yaml --write   # ghi + tự chạy agent_lint
+python -m src.factory.new --spec my_agent.yaml --confirmed-by <người>          # dry-run: liệt kê file sẽ ghi
+python -m src.factory.new --spec my_agent.yaml --confirmed-by <người> --write --create-branch
+                                                      # ghi trên nhánh factory/<id> (tự tạo/chuyển) + agent_lint
+                                                      # → PR → người duyệt (không merge thẳng, không push)
 python -m src.factory.agent_lint <id>                 # hoặc --all
 python3 -m pytest -q
 ```

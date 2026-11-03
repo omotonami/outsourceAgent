@@ -23,8 +23,9 @@ Mọi số ở `config/autonomy.yaml` (ngưỡng, số mức hạ, trigger, cặ
     đổi mức gần nhất → `pending`. Chưa có hiệu lực.
   - **Hạ = tự động, ngay**: revision / gate edit / regression → hạ `demote.on_*` mức, huỷ pending,
     ghi `risk_register` (phase `autonomy`). Mỗi bằng chứng chỉ tính một lần (mốc `since`).
-- `promote(agent, task_type, approved_by=<người>)` — chỉ khi có pending; từ chối approver rỗng, bot
-  (`reject_approvers`, `auto*`) hoặc chính agent; từ chối đích > L2. `reject(...)` bác đề xuất.
+- `promote(agent, task_type, approved_by=<người>)` — chỉ khi có pending; từ chối approver rỗng, không phải
+  người (danh sách chung `src/governance/confirm.py`: agent/writer/hệ thống/`gate_ui`/`auto*` + `reject_approvers`)
+  hoặc chính agent; từ chối đích > L2. `reject(...)` bác đề xuất.
 - `report_incident(agent, task_type, reason, board)` → về `demote.on_incident` (L0).
 - `can_run(agent, task_type, trigger)` → `{allowed, level, review, reason}`.
 
@@ -35,6 +36,8 @@ Mọi số ở `config/autonomy.yaml` (ngưỡng, số mức hạ, trigger, cặ
 - Gate UI (`src/server/app.py`): `POST /api/gate/approve` (không `edited`) → sau khi NGƯỜI ký qua `gate_ui`,
   gọi `record_review(agent, gate_task_types[gate], gate, reviewer, edited=False)` cho mỗi agent có output
   trong phase của gate. Chỉ ghi log, không ký thay. `edited=true` → không ghi (sửa đi qua `gate_feedback`).
+  Ghi review lỗi (`OSError`/`ValueError`/`ConfigError`) → chữ ký vẫn hiệu lực, request trả bình thường,
+  ghi `risk_register` (writer `gate_ui`, phase `autonomy`) để người xử lý; lỗi khác vẫn nổi lên.
 - Huddle: `huddle_trigger.check(board, phase, autonomy=ax, trigger="routine")` → agent `huddle`,
   task_type = phase. Không truyền `autonomy` = hành vi cũ.
 

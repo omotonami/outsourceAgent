@@ -1,0 +1,4 @@
+# Pin model version. Đổi file này phải chạy lại eval suite.
+haiku: claude-haiku-5-5
+sonnet: claude-sonnet-5-5
+opus: claude-opus-5-5

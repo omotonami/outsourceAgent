@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "c2_tester output",
+  "type": "object",
+  "properties": {
+    "test_cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "ac_ref": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "unit",
+              "e2e"
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expected": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ac_ref",
+          "steps",
+          "expected"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "test_cases"
+  ],
+  "additionalProperties": false
+}

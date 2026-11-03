@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "b4_tech_lead output",
+  "type": "object",
+  "properties": {
+    "architecture": {
+      "type": "object"
+    },
+    "adr": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "options_rejected": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "task_backlog": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "story_ref": {
+            "type": "string"
+          },
+          "spec": {
+            "type": "string"
+          },
+          "AC": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "deps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "size": {
+            "type": "string"
+          },
+          "risk_level": {
+            "enum": [
+              "low",
+              "normal",
+              "high"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "spec",
+          "risk_level"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "architecture",
+    "task_backlog"
+  ],
+  "additionalProperties": false
+}

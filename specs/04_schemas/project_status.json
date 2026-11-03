@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "project_status",
+  "type": "object",
+  "required": [
+    "phase",
+    "tasks_done",
+    "tasks_total"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "phase": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "tasks_done": {
+      "type": "integer"
+    },
+    "tasks_total": {
+      "type": "integer"
+    },
+    "gates_signed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "budget_used_ratio": {
+      "type": "number"
+    },
+    "open_risks": {
+      "type": "integer"
+    },
+    "overdue_questions": {
+      "type": "integer"
+    },
+    "build_loops": {
+      "type": "integer"
+    }
+  }
+}

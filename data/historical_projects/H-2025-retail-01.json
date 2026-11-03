@@ -1,0 +1,25 @@
+{
+  "id": "H-2025-retail-01",
+  "domain": "retail",
+  "tech_stack": [
+    "react",
+    "node"
+  ],
+  "estimate_md_total": 120,
+  "actual_md_total": 150,
+  "closed_at": "2025-03-20",
+  "wbs": [
+    {
+      "item": "Giỏ hàng và thanh toán",
+      "role": "dev",
+      "estimate_md": 18,
+      "actual_md": 24
+    },
+    {
+      "item": "Quản lý kho",
+      "role": "dev",
+      "estimate_md": 16,
+      "actual_md": 20
+    }
+  ]
+}

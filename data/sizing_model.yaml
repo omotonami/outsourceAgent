@@ -1,0 +1,17 @@
+# Mô hình parametric: size -> khoảng man-day. Dùng khi CHƯA có historical data.
+# Nâng cấp sau: thêm method: function_points (đếm input/output/entity) -> size.
+method: tshirt            # tshirt | function_points
+unit: man-day
+sizes:
+  S:  {low: 2,  base: 3,  high: 5}
+  M:  {low: 5,  base: 8,  high: 13}
+  L:  {low: 13, base: 20, high: 34}
+  XL: {low: 34, base: 50, high: 80}
+# nhân hệ số theo domain (rủi ro/tuân thủ làm tăng effort)
+domain_multiplier:
+  fintech: 1.25          # MAS TRM, audit log, bảo mật cao
+  healthcare: 1.3
+  retail: 1.0
+  default: 1.0
+# ánh xạ Function Points -> size (để khi method=function_points)
+fp_to_size: [[0,10,"S"],[11,25,"M"],[26,60,"L"],[61,9999,"XL"]]

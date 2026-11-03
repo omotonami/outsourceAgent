@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "b3_ui input",
+  "type": "object",
+  "required": [
+    "design_spec"
+  ],
+  "properties": {
+    "design_spec": {
+      "type": "object"
+    },
+    "stories": {
+      "type": "array"
+    },
+    "brand_guideline": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

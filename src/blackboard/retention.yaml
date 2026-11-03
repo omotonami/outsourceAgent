@@ -1,0 +1,3 @@
+drafts_days: 30
+gated_artifacts: per_contract
+client_data_on_project_close: delete_or_return   # PDPA + NDA

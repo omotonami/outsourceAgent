@@ -1,0 +1,6 @@
+# Provider và region đã được bảo mật + legal duyệt. Gateway từ chối mọi thứ khác.
+approved:
+  - provider: anthropic
+    region: "<CHỐT: region đáp ứng cam kết data residency với client>"
+    zero_data_retention: true
+pii_mask: true

@@ -1,0 +1,15 @@
+# Mỗi transition có guard kiểm tra bằng Code (tên hàm trong gates.py).
+states: [INTAKE, PRESALES, AWAIT_G1, DISCOVERY, AWAIT_G2, BUILD, AWAIT_G3, SECURITY, AWAIT_G4, RELEASED, ESCALATED]
+transitions:
+  - {from: INTAKE,    to: PRESALES,  guard: lead_brief_valid}
+  - {from: PRESALES,  to: AWAIT_G1,  guard: presales_ready}
+  - {from: AWAIT_G1,  to: DISCOVERY, guard: g1_signed}
+  - {from: DISCOVERY, to: AWAIT_G2,  guard: discovery_ready}
+  - {from: AWAIT_G2,  to: BUILD,     guard: g2_signed}
+  - {from: BUILD,     to: AWAIT_G3,  guard: build_ready}
+  - {from: AWAIT_G3,  to: SECURITY,  guard: g3_signed}
+  - {from: SECURITY,  to: AWAIT_G4,  guard: security_scanned}
+  - {from: AWAIT_G4,  to: RELEASED,  guard: g4_signed}
+gate_states: {AWAIT_G1: G1, AWAIT_G2: G2, AWAIT_G3: G3, AWAIT_G4: G4}
+task_substates: [ready, in_dev, testing, qc, await_merge, merged]
+max_build_loops: 3

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "a3_proposal input",
+  "type": "object",
+  "properties": {
+    "business_context": {
+      "type": "object"
+    },
+    "estimate": {
+      "type": "object"
+    },
+    "proposal_template": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "estimate"
+  ],
+  "additionalProperties": false
+}

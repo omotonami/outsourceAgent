@@ -1,0 +1,56 @@
+{
+  "id": "H-2024-fin-01",
+  "domain": "fintech",
+  "tech_stack": [
+    "react-native",
+    "node",
+    "postgres"
+  ],
+  "estimate_md_total": 210,
+  "actual_md_total": 242,
+  "closed_at": "2024-11-30",
+  "wbs": [
+    {
+      "item": "KYC onboarding flow",
+      "role": "dev",
+      "estimate_md": 18,
+      "actual_md": 22
+    },
+    {
+      "item": "Liên kết thẻ ngân hàng",
+      "role": "dev",
+      "estimate_md": 14,
+      "actual_md": 16
+    },
+    {
+      "item": "Lịch sử giao dịch",
+      "role": "dev",
+      "estimate_md": 10,
+      "actual_md": 11
+    },
+    {
+      "item": "Thông báo đẩy",
+      "role": "dev",
+      "estimate_md": 6,
+      "actual_md": 7
+    },
+    {
+      "item": "Dashboard đối soát admin",
+      "role": "dev",
+      "estimate_md": 20,
+      "actual_md": 26
+    },
+    {
+      "item": "Audit log bất biến (MAS TRM)",
+      "role": "dev",
+      "estimate_md": 12,
+      "actual_md": 15
+    },
+    {
+      "item": "Thiết lập CI và môi trường",
+      "role": "devops",
+      "estimate_md": 8,
+      "actual_md": 9
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "a2_estimation LLM draft (không số)",
+  "type": "object",
+  "required": [
+    "wbs",
+    "assumptions",
+    "exclusions",
+    "risks",
+    "reflection"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "wbs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "item",
+          "role",
+          "size"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
+          "item": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "size": {
+            "enum": [
+              "S",
+              "M",
+              "L",
+              "XL"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "exclusions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "risks": {
+      "type": "array"
+    },
+    "reflection": {
+      "type": "object",
+      "required": [
+        "passed",
+        "issues"
+      ],
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "issues": {
+          "type": "array"
+        }
+      }
+    }
+  }
+}

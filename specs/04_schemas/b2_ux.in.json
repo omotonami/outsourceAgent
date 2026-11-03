@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "b2_ux input",
+  "type": "object",
+  "properties": {
+    "stories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "as_a": {
+            "type": "string"
+          },
+          "i_want": {
+            "type": "string"
+          },
+          "so_that": {
+            "type": "string"
+          },
+          "AC": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "priority": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_a",
+          "i_want",
+          "so_that",
+          "AC"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "design_system": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "stories"
+  ],
+  "additionalProperties": false
+}

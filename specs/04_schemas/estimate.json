@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "wbs",
+    "effort_md_total",
+    "cost_range",
+    "assumptions"
+  ],
+  "properties": {
+    "wbs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "item",
+          "effort_md",
+          "source",
+          "label"
+        ],
+        "properties": {
+          "item": {
+            "type": "string"
+          },
+          "effort_md": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "source": {
+            "type": "object",
+            "required": [
+              "type",
+              "refs"
+            ],
+            "properties": {
+              "type": {
+                "enum": [
+                  "historical",
+                  "none"
+                ]
+              },
+              "refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "label": {
+            "type": "string",
+            "enum": [
+              "FACT",
+              "ASSUMPTION",
+              "RECOMMENDATION"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "size": {
+            "enum": [
+              "S",
+              "M",
+              "L",
+              "XL"
+            ]
+          },
+          "basis": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "effort_md_total": {
+      "type": "number"
+    },
+    "cost_range": {
+      "type": "object",
+      "required": [
+        "low",
+        "base",
+        "high"
+      ],
+      "properties": {
+        "low": {
+          "type": "number"
+        },
+        "base": {
+          "type": "number"
+        },
+        "high": {
+          "type": "number"
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "exclusions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "risks": {
+      "type": "array"
+    },
+    "needs_human": {
+      "type": "boolean"
+    },
+    "reflection": {
+      "type": "object"
+    }
+  }
+}

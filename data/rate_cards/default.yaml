@@ -1,0 +1,10 @@
+currency: SGD
+blended_rate: 650      # dùng khi chưa tách theo vai trò
+rates:
+  dev: 650
+  ba: 600
+  qa: 550
+  tech_lead: 850
+  pm: 700
+  devops: 700
+  designer: 600

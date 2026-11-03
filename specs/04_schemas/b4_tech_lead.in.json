@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "b4_tech_lead input",
+  "type": "object",
+  "properties": {
+    "stories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "as_a": {
+            "type": "string"
+          },
+          "i_want": {
+            "type": "string"
+          },
+          "so_that": {
+            "type": "string"
+          },
+          "AC": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "priority": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_a",
+          "i_want",
+          "so_that",
+          "AC"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "screens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "states": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "story_refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "purpose",
+          "states"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "nfr": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tech_constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "stories"
+  ],
+  "additionalProperties": false
+}

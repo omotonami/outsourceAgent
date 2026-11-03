@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "e1_pm output",
+  "type": "object",
+  "required": [
+    "summary",
+    "alerts"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string"
+    },
+    "alerts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "severity",
+          "msg"
+        ],
+        "properties": {
+          "severity": {
+            "enum": [
+              "info",
+              "warn",
+              "critical"
+            ]
+          },
+          "msg": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

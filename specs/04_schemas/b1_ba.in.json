@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "b1_ba input",
+  "type": "object",
+  "properties": {
+    "signed_proposal": {
+      "type": "object"
+    },
+    "business_context": {
+      "type": "object"
+    },
+    "workshop_notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "signed_proposal"
+  ],
+  "additionalProperties": false
+}

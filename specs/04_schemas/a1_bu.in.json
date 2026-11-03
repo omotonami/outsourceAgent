@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "a1_bu input",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string"
+    },
+    "lead_brief": {
+      "type": "object"
+    },
+    "rfp_docs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "domain_glossary": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "project_id",
+    "lead_brief"
+  ],
+  "additionalProperties": false
+}

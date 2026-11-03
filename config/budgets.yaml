@@ -1,0 +1,8 @@
+# Trần token mỗi dự án theo phase. Đặt số sau khi có baseline.
+warn_at_ratio: 0.8
+block_auto_escalate_at_ratio: 1.0
+per_project_tokens:
+  presales: null
+  discovery: null
+  build: null
+  security: null

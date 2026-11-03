@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "d1_soc output",
+  "type": "object",
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "Low",
+              "Medium",
+              "High",
+              "Critical"
+            ]
+          },
+          "cwe": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "remediation": {
+            "type": "string"
+          },
+          "false_positive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "severity"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "gate": {
+      "enum": [
+        "pass",
+        "block"
+      ]
+    }
+  },
+  "required": [
+    "findings",
+    "gate"
+  ],
+  "additionalProperties": false
+}

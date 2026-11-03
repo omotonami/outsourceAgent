@@ -1,0 +1,128 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outsourcing Agents — Dashboard</title>
+<style>
+:root{--paper:#FBFAF7;--panel:#fff;--ink:#1A2332;--muted:#5C6B7A;--line:#E6E8EC;
+--fact:#0F6E6E;--factBg:#E6F2F1;--assume:#B5720E;--assumeBg:#FBF0DC;--ok:#15803D;--bad:#8A1C1C;
+--haiku:#64748B;--sonnet:#2563EB;--opus:#7C3AED;}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);
+font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:20px}
+h1{font-size:24px;margin:2px 0 12px}.sub{font-size:13px;color:var(--muted);font-weight:600}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+button{background:var(--ink);color:#fff;border:0;padding:7px 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer}
+button.ghost{background:#fff;color:var(--ink);border:1px solid var(--ink)}
+button.ok{background:var(--ok)}button.bad{background:var(--bad)}button:disabled{background:var(--line);color:var(--muted);cursor:default}
+.grid{display:grid;grid-template-columns:200px 1fr 260px;gap:16px;align-items:start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.zones{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.zone{border:1.5px solid var(--line);background:var(--paper);opacity:.45;border-radius:8px;padding:8px 6px;
+font-size:11.5px;font-weight:600;text-align:center;transition:all .2s}
+.zone.on{opacity:1;background:#fff;color:var(--ink)}
+.zone.read{border-color:var(--ink)}.zone.write{border-color:var(--fact);background:var(--factBg);color:var(--fact)}
+.pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:5px;color:#fff}
+code{background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:2px 7px;font-size:12px}
+.bar{flex:1;background:var(--paper);border-radius:3px;height:12px;overflow:hidden}
+.bar>div{height:100%}
+.step{font-size:12.5px;padding:3px 0 3px 8px;border-left:2px solid var(--line);color:var(--muted)}
+.step.now{border-left-color:var(--ink);color:var(--ink);font-weight:700}
+.step.done{border-left-color:var(--ok);color:var(--ink)}
+.surf{background:var(--assumeBg);border-radius:8px;padding:8px 12px;margin:8px 0;font-size:13px}
+</style></head><body><div class="wrap">
+<div class="sub">Outsourcing delivery · SG · engine Python thật</div>
+<h1>Pipeline 4 phase — dashboard</h1>
+<div class="controls">
+  <button id="play">▶ Chạy</button>
+  <button class="ghost" id="stepBtn">Từng bước ›</button>
+  <button class="ghost" id="reset">↺ Reset</button>
+  <label style="font-size:13px;display:flex;gap:6px;align-items:center;margin-left:8px">
+    <input type="checkbox" id="risk" checked> Task build high-risk</label>
+  <span id="mode" style="font-size:12px;color:var(--muted)"></span>
+</div>
+<div class="grid">
+  <div class="card" id="rail"></div>
+  <div style="display:grid;gap:14px">
+    <div class="card" id="cur" style="min-height:92px"></div>
+    <div class="card"><div style="font-size:13px;font-weight:700;margin-bottom:10px">Blackboard — vùng sáng khi được ghi</div>
+      <div class="zones" id="zones"></div><div id="peek" style="margin-top:10px;font-size:12px;color:var(--muted)"></div></div>
+  </div>
+  <div style="display:grid;gap:14px">
+    <div class="card"><div style="font-size:13px;font-weight:700;margin-bottom:8px">Model routing</div>
+      <div id="legend"></div></div>
+    <div class="card"><div style="font-size:13px;font-weight:700">Token & chi phí</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">ước tính minh hoạ</div>
+      <div id="total" style="font-size:22px;font-weight:700"></div>
+      <div id="tok" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+      <div id="costlog" style="display:flex;flex-direction:column;gap:4px"></div></div>
+  </div>
+</div>
+<p style="font-size:11.5px;color:var(--muted);margin-top:18px">Blackboard, routing, token là số thật từ engine Python. Mock mặc định; đặt LIVE=1 để gọi model thật.</p>
+</div>
+<script>
+const ZONES=["lead_brief","business_context","estimate","proposal","requirements","design_spec","ui_system","architecture","task_backlog","build_results","security_report"];
+const TIER={haiku:"var(--haiku)",sonnet:"var(--sonnet)",opus:"var(--opus)"};
+const PHASES={A:"Pre-sales",B:"Discovery & Design",C:"Build",D:"Security & Release"};
+let playing=false, timer=null;
+const $=id=>document.getElementById(id);
+async function api(p,m="GET"){const r=await fetch(p,{method:m});return r.json();}
+function render(s){
+  const cur=s.steps[s.i];
+  // rail
+  let rail="";
+  for(const[p,label]of Object.entries(PHASES)){
+    const active=cur&&cur.phase===p;
+    rail+=`<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:700;color:${active?'var(--ink)':'var(--muted)'}">Phase ${p} · ${label}</div>`;
+    s.steps.forEach((st,idx)=>{if(st.phase!==p)return;
+      const now=idx===s.i,done=idx<s.i;
+      let lbl=st.gate?`▶ ${st.gate} ${s.signed[st.gate]==='approved'?'✓':''}`:st.agent;
+      let tcol=st.tier?`<span style="color:${TIER[st.tier]};font-weight:700"> ·${st.tier[0].toUpperCase()}</span>`:'';
+      rail+=`<div class="step ${now?'now':done?'done':''}">${lbl}${tcol}</div>`;});
+    rail+="</div>";}
+  $("rail").innerHTML=rail;
+  // current
+  let h="";
+  if(s.i>=s.steps.length||(cur&&cur.agent==="RELEASED")){h=`<div style="font-weight:700;color:var(--ok);font-size:16px">RELEASED ✓</div><div style="font-size:13px;color:var(--muted);margin-top:4px">Dữ liệu đã chảy hết qua Blackboard. Đóng dự án → historical DB dày thêm → lần sau nhiều FACT.</div>`;}
+  else if(cur&&cur.gate){h=`<div style="font-weight:700;font-size:15px">▶ ${cur.gate} — chờ ${cur.who} ký</div>
+    <div class="surf"><b style="color:var(--assume)">Người duyệt thấy trước:</b><ul style="margin:4px 0 0;padding-left:18px">${cur.surface.map(x=>`<li>${x}</li>`).join("")}</ul></div>
+    <div style="display:flex;gap:10px"><button class="ok" onclick="gate('approve')">Duyệt</button><button class="bad" onclick="gate('reject')">Trả lại</button></div>`;}
+  else if(cur){h=`<div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;font-size:15px">${cur.agent}</span>${cur.tier?`<span class="pill" style="background:${TIER[cur.tier]}">${cur.tier}</span>`:''}</div>
+    ${cur.tier?`<div style="font-size:12.5px;color:var(--muted);margin-top:3px">vì sao model này: ${cur.why}</div>`:''}
+    <div style="font-size:13px;margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <span style="color:var(--muted)">đọc</span>${(cur.reads.length?cur.reads:["—"]).map(z=>`<code>${z}</code>`).join("")}
+    <b>→ ${cur.tier||"Code"} →</b><span style="color:var(--muted)">ghi</span>
+    ${(cur.writes.length?cur.writes:["—"]).map(z=>`<code style="background:var(--factBg);border-color:var(--fact);color:var(--fact)">${z}</code>`).join("")}</div>
+    ${cur.verdict?`<div style="margin-top:8px;font-size:13px;font-weight:700;color:${cur.verdict==='PASS'?'var(--ok)':'var(--bad)'}">QC: ${cur.verdict}${cur.loop?' — '+cur.loop:''}</div>`:''}`;}
+  $("cur").innerHTML=h;
+  // zones
+  const written=new Set(s.zones);
+  $("zones").innerHTML=ZONES.map(z=>{
+    const on=written.has(z),r=cur&&!cur.gate&&(cur.reads||[]).includes(z),w=cur&&!cur.gate&&(cur.writes||[]).includes(z);
+    return `<div class="zone ${on?'on':''} ${w?'write':r?'read':''}">${z}${r?'<div style="font-size:10px">đang đọc</div>':''}${w?'<div style="font-size:10px;color:var(--fact)">đang ghi</div>':''}</div>`;
+  }).join("")+`<div class="zone" style="border:1.5px dashed var(--assume);opacity:1;color:var(--assume)">gate_signatures<div style="font-size:10px">chỉ người ký</div></div>`;
+  if(s.estimate_preview){$("peek").innerHTML="estimate: "+s.estimate_preview.map(i=>`${i.item.slice(0,18)} <b style='color:${i.label==='FACT'?'var(--fact)':'var(--assume)'}'>[${i.label}]</b>`).join(" · ");}
+  // legend
+  $("legend").innerHTML=Object.entries(TIER).map(([t,c])=>`<div style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-bottom:4px"><span style="width:12px;height:12px;border-radius:3px;background:${c}"></span><b>${t}</b><span style="color:var(--muted)">${t==='haiku'?'parse, triage':t==='sonnet'?'việc chính':'quyết định đắt'}</span></div>`).join("");
+  // cost
+  $("total").textContent="$"+s.total_cost.toFixed(4);
+  $("tok").textContent=s.total_tok.toLocaleString()+" tokens";
+  const mx=Math.max(...s.log.map(l=>l.cost),0.001);
+  $("costlog").innerHTML=s.log.map(e=>`<div style="display:flex;align-items:center;gap:6px">
+    <span style="width:54px;font-size:10.5px;color:var(--muted);text-align:right">${e.agent.slice(0,9)}</span>
+    <span style="color:#fff;background:${TIER[e.tier]};font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px">${e.tier[0].toUpperCase()}</span>
+    <span style="width:46px;font-size:9.5px;text-align:right;color:var(--muted)">${(e.tok[0]+e.tok[1]).toLocaleString()}t</span>
+    <div class="bar" style="flex:1"><div style="width:${Math.max(6,e.cost/mx*100)}%;background:${TIER[e.tier]}"></div></div>
+    <span style="width:52px;font-size:10px;text-align:right;color:var(--muted)">$${e.cost.toFixed(4)}</span></div>`).join("")||'<div style="font-size:12px;color:var(--muted)">chưa gọi model</div>';
+  $("mode").textContent=s.dev_high?"routing: Dev/QC → Opus":"routing: Dev/QC → Sonnet";
+  // gate pause
+  if(cur&&cur.gate){playing=false;clearTimeout(timer);$("play").textContent="▶ Chạy";}
+}
+async function step(){const s=await api("/api/step","POST");render(s);
+  if(s.status==="done"||(s.steps[s.i]&&s.steps[s.i].gate)){playing=false;clearTimeout(timer);$("play").textContent="▶ Chạy";}}
+async function gate(d){const s=await api("/api/gate/"+d,"POST");render(s);if(playing)loop();}
+function loop(){if(!playing)return;step().then(()=>{if(playing)timer=setTimeout(loop,1000);});}
+$("play").onclick=()=>{playing=!playing;$("play").textContent=playing?"❚❚ Dừng":"▶ Chạy";if(playing)loop();else clearTimeout(timer);};
+$("stepBtn").onclick=step;
+$("reset").onclick=async()=>{playing=false;clearTimeout(timer);$("play").textContent="▶ Chạy";render(await api("/api/reset?dev_high="+$("risk").checked,"POST"));};
+$("risk").onchange=$("reset").onclick;
+api("/api/state").then(render);
+</script></body></html>

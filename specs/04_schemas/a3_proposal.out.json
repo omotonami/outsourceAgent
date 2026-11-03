@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "a3_proposal output",
+  "type": "object",
+  "properties": {
+    "proposal_doc": {
+      "type": "string"
+    },
+    "assumptions_section": {
+      "type": "string"
+    },
+    "exclusions_section": {
+      "type": "string"
+    },
+    "payment_terms_ref": {
+      "type": "string"
+    },
+    "review_notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "proposal_doc",
+    "assumptions_section",
+    "exclusions_section",
+    "review_notes"
+  ],
+  "additionalProperties": false
+}

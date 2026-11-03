@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "c3_qc output",
+  "type": "object",
+  "properties": {
+    "verdict": {
+      "enum": [
+        "pass",
+        "fail"
+      ]
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "severity": {
+            "enum": [
+              "Critical",
+              "Important",
+              "Improvement"
+            ]
+          },
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "fix_hint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "severity",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "verdict",
+    "issues"
+  ],
+  "additionalProperties": false
+}

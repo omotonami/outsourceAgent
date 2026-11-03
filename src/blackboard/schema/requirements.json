@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "stories"
+  ],
+  "properties": {
+    "stories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "as_a",
+          "i_want",
+          "so_that",
+          "AC"
+        ]
+      }
+    },
+    "open_questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "q",
+          "owner",
+          "due"
+        ]
+      }
+    }
+  }
+}

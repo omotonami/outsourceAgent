@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "c1_dev input",
+  "type": "object",
+  "properties": {
+    "task": {
+      "type": "object"
+    },
+    "spec": {
+      "type": "string"
+    },
+    "AC": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "repo_context": {
+      "type": "string"
+    },
+    "coding_standard": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "task"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "b1_ba output",
+  "type": "object",
+  "properties": {
+    "epics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "stories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "as_a": {
+            "type": "string"
+          },
+          "i_want": {
+            "type": "string"
+          },
+          "so_that": {
+            "type": "string"
+          },
+          "AC": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "priority": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_a",
+          "i_want",
+          "so_that",
+          "AC"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "open_questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "due": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "q",
+          "owner",
+          "due"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "scope_delta": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "stories",
+    "open_questions"
+  ],
+  "additionalProperties": false
+}

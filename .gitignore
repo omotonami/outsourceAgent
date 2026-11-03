@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.env
+eval/runs/*
+!eval/runs/.gitkeep
+
+# Dữ liệu client thật KHÔNG commit; chỉ seed ẩn danh H-* được giữ.
+data/historical_projects/client_*.json
+.env
+
+# Môi trường + rác hệ điều hành
+.venv/
+venv/
+.DS_Store
+.idea/
+.vscode/
+# Dữ liệu sinh ra lúc chạy
+data/ai_inventory/
+knowledge/*/learned/PROPOSED.md

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "c2_tester input",
+  "type": "object",
+  "properties": {
+    "pr": {
+      "type": "object"
+    },
+    "AC": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "test_plan": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "AC"
+  ],
+  "additionalProperties": false
+}

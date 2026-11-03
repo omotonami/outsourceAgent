@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "e1_pm input",
+  "type": "object",
+  "required": [
+    "project_status"
+  ],
+  "properties": {
+    "project_status": {
+      "type": "object"
+    },
+    "risk_register": {
+      "type": "array"
+    },
+    "trace_summary": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

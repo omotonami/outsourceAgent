@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "a1_bu output",
+  "type": "object",
+  "properties": {
+    "business_context": {
+      "type": "object"
+    },
+    "domain": {
+      "type": "string"
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "desc": {
+            "type": "string"
+          },
+          "label": {
+            "enum": [
+              "FACT",
+              "ASSUMPTION",
+              "RECOMMENDATION"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "desc",
+          "label"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "tech_hints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "compliance_flags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ambiguities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "business_context",
+    "domain",
+    "modules",
+    "compliance_flags",
+    "ambiguities"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "b3_ui output",
+  "type": "object",
+  "required": [
+    "tokens_css",
+    "components",
+    "screens"
+  ],
+  "properties": {
+    "tokens": {
+      "type": "object"
+    },
+    "tokens_css": {
+      "type": "string"
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "html",
+          "states"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "html": {
+            "type": "string"
+          },
+          "states": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "screens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "html",
+          "macrostructure"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ref_spec": {
+            "type": "string"
+          },
+          "html": {
+            "type": "string"
+          },
+          "macrostructure": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "a11y": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "design_md": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "c3_qc input",
+  "type": "object",
+  "properties": {
+    "pr_diff": {
+      "type": "string"
+    },
+    "spec": {
+      "type": "string"
+    },
+    "AC": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "coding_standard": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "pr_diff"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,44 @@
+{
+  "id": "H-2025-fin-02",
+  "domain": "fintech",
+  "tech_stack": [
+    "flutter",
+    "node",
+    "postgres"
+  ],
+  "estimate_md_total": 180,
+  "actual_md_total": 171,
+  "closed_at": "2025-06-15",
+  "wbs": [
+    {
+      "item": "KYC onboarding flow",
+      "role": "dev",
+      "estimate_md": 16,
+      "actual_md": 17
+    },
+    {
+      "item": "Gửi tiền quốc tế qua cổng FX",
+      "role": "dev",
+      "estimate_md": 22,
+      "actual_md": 20
+    },
+    {
+      "item": "Lịch sử giao dịch",
+      "role": "dev",
+      "estimate_md": 9,
+      "actual_md": 9
+    },
+    {
+      "item": "Báo cáo đối soát",
+      "role": "dev",
+      "estimate_md": 14,
+      "actual_md": 13
+    },
+    {
+      "item": "Thiết lập CI và môi trường",
+      "role": "devops",
+      "estimate_md": 7,
+      "actual_md": 7
+    }
+  ]
+}

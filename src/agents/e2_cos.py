@@ -50,8 +50,7 @@ def gather(board, request):
     inp = {"request": request}
     if (ps := rb.get("project_status")) is not None:
         inp["project_status"] = ps
-    risks = [r for r in rb.get("risk_register") or []
-             if str(r.get("status") or "open").lower() not in ("closed", "resolved")]
+    risks = [r for r in rb.get("risk_register") or [] if team_feed.is_open_risk(r)]
     if risks:
         inp["risk_register"] = risks
     if (dr := rb.get("decision_records")):

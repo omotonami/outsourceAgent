@@ -9,7 +9,8 @@ Chỉ xuất SUMMARY dựng từ field whitelist (≤ MAX_SUMMARY ký tự) — 
 transcript, prompt, messages, contract hay output đầy đủ. Không ghi Blackboard.
 Cây spawn: SPAWN {by|parent → task_id}; trạng thái node = event cuối của task đó.
 """
-TYPES = ("ASSIGN", "SPAWN", "RESULT", "BLOCKED", "DECISION", "KILL")
+from src.orchestrator.events import SOURCE_TYPES, TYPES, EventType
+
 MAX_SUMMARY = 200
 BLOCKING_SEVERITY = {"high", "critical"}
 _CLOSED = {"closed", "resolved"}
@@ -31,14 +32,14 @@ def _trace_events(entries):
         if kind not in TYPES:
             continue                         # gateway/khác: không phải sự kiện team
         tid = e.get("task_id")
-        if kind == "SPAWN":
+        if kind == EventType.SPAWN:
             s = f"spawn {tid}" + (f" ({e['trigger']})" if e.get("trigger") else "") \
                 + (f" · lần {e['attempt']}" if e.get("attempt") else "")
-        elif kind == "RESULT":
+        elif kind == EventType.RESULT:
             ok = e.get("ok")
             s = f"{tid}: " + ("OK" if ok else f"FAIL — {e.get('reason') or 'không rõ'}") \
                 + (" · QC critical" if e.get("qc_critical") else "")
-        elif kind == "ASSIGN":
+        elif kind == EventType.ASSIGN:
             s = f"giao {tid}" + (f" cho {e['agent']}" if e.get("agent") else "")
         else:                                # BLOCKED / KILL
             s = (f"{tid}: " if tid else "") + str(e.get("reason") or kind.lower())
@@ -48,7 +49,8 @@ def _trace_events(entries):
 
 
 def _huddle_events(entries):
-    return [{"type": "RESULT", "ts": _ts(e.get("ts")), "actor": e.get("agent"), "task_id": None,
+    return [{"type": SOURCE_TYPES["huddle_log"].value, "ts": _ts(e.get("ts")), "actor": e.get("agent"),
+             "task_id": None,
              "summary": _cut(f"huddle vòng {e.get('round', '?')} · {e.get('role', '?')}: {e.get('summary', '')}"),
              "source": "huddle_log"} for e in entries or []]
 
@@ -60,19 +62,25 @@ def _decision_events(entries):
         s = f"{r.get('question', '?')} → " + (chosen if chosen else f"chưa chốt ({r.get('stopped_reason') or 'mở'})")
         if r.get("open_questions"):
             s += f" · {len(r['open_questions'])} câu hỏi mở"
-        out.append({"type": "DECISION", "ts": _ts(r.get("ts")), "actor": "huddle", "task_id": None,
+        out.append({"type": SOURCE_TYPES["decision_records"].value, "ts": _ts(r.get("ts")), "actor": "huddle", "task_id": None,
                     "summary": _cut(s), "source": "decision_records"})
     return out
+
+
+def is_open_risk(r: dict) -> bool:
+    """Risk còn mở: status rỗng = open; closed/resolved (không phân biệt hoa thường) = đóng."""
+    return str(r.get("status") or "open").lower() not in _CLOSED
 
 
 def _risk_events(entries):
     out = []
     for r in entries or []:
-        if str(r.get("status") or "open").lower() in _CLOSED:
+        if not is_open_risk(r):
             continue
         if str(r.get("severity") or "").lower() not in BLOCKING_SEVERITY:
             continue
-        out.append({"type": "BLOCKED", "ts": _ts(r.get("ts")), "actor": r.get("source_agent"), "task_id": None,
+        out.append({"type": SOURCE_TYPES["risk_register"].value, "ts": _ts(r.get("ts")),
+                    "actor": r.get("source_agent"), "task_id": None,
                     "summary": _cut(f"risk {r.get('severity')}: {r.get('risk', '')}"), "source": "risk_register"})
     return out
 
@@ -94,7 +102,7 @@ def spawn_tree(board):
     nodes, parent_of, order = {}, {}, []
     for e in board.get("trace_log") or []:
         kind, tid = str(e.get("event") or "").upper(), e.get("task_id")
-        if kind == "SPAWN" and tid:
+        if kind == EventType.SPAWN and tid:
             parent = e.get("parent") or e.get("by") or "orchestrator"
             for n in (parent, tid):
                 if n not in nodes:
@@ -103,8 +111,8 @@ def spawn_tree(board):
             parent_of[tid] = parent
             nodes[tid]["status"] = "SPAWN"
             nodes[tid]["attempts"] += 1
-        elif tid in nodes and kind in ("RESULT", "BLOCKED", "KILL"):
-            nodes[tid]["status"] = ("OK" if e.get("ok") else "FAIL") if kind == "RESULT" else kind
+        elif tid in nodes and kind in (EventType.RESULT, EventType.BLOCKED, EventType.KILL):
+            nodes[tid]["status"] = ("OK" if e.get("ok") else "FAIL") if kind == EventType.RESULT else kind
     for child, parent in parent_of.items():
         if child != parent and child not in nodes[parent]["children"]:
             nodes[parent]["children"].append(child)

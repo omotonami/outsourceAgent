@@ -39,7 +39,7 @@ from src.blackboard.proxy import WorkerBoard
 from src.gateway import budget as ledger
 from src.tools.integrations.repo import MergeConflict as _MergeConflict
 
-from . import escalation
+from . import escalation, events
 
 ROOT = Path(__file__).parents[2]
 _BUDGETS = yaml.safe_load((ROOT / "config/budgets.yaml").read_text(encoding="utf-8"))
@@ -284,8 +284,7 @@ class Dispatcher:
 
     def _event(self, kind: str, task_id: str | None, **fields) -> None:
         with self._lock:
-            self.board.append("trace_log", {"event": kind, "task_id": task_id, "ts": time.time(),
-                                            "by": PARENT, **fields}, agent=AGENT)
+            events.emit(self.board, kind, agent=AGENT, by=PARENT, task_id=task_id, **fields)
 
     # ---------- Contract ----------
     def build_contract(self, task: dict, trigger: str) -> dict:

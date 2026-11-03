@@ -18,6 +18,7 @@ from jsonschema import ValidationError, validate
 from src.agents.runtime import _extract_json
 from src.common import config as cfgload
 from src.gateway import budget, llm_client, router
+from src.orchestrator import events
 
 ROOT = cfgload.ROOT
 AGENT = "huddle"
@@ -32,9 +33,8 @@ def config():
 
 
 def _append(board, zone, entry, agent):
-    if zone not in ZONES:                      # phòng thủ thêm; quyền thật do Blackboard enforce
-        raise PermissionError(f"huddle không được ghi {zone}")
-    board.append(zone, entry, agent=agent)
+    """Mọi ghi của huddle đi qua events.record — chỉ ZONES; quyền thật do Blackboard enforce."""
+    events.record(board, zone, entry, agent=agent, allowed=ZONES)
 
 
 def _list(v):

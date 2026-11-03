@@ -27,7 +27,7 @@ Tài liệu này tóm tắt toàn bộ cuộc làm việc để tiếp tục ở
 
 ---
 
-## 3. Hệ đã xây: `outsourceAgent` (nhánh `feat/v3-bot-team`, 314 test pass, `agent_lint --all` 14/14)
+## 3. Hệ đã xây: `outsourceAgent` (nhánh `feat/v3-bot-team`, 370 test pass, `agent_lint --all` 14/14)
 
 ### Cấu trúc thư mục
 ```
@@ -81,7 +81,7 @@ CLAUDE.md   hiến pháp cho Claude Code
 ```bash
 /opt/homebrew/bin/python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pytest -q                              # 314 test, không cần key
+pytest -q                              # 370 test, không cần key
 python -m src.factory.agent_lint --all # 14/14
 python -m src.demo.dry_run             # mock cả 4 phase
 export ANTHROPIC_API_KEY=sk-ant-...

@@ -234,3 +234,27 @@ def test_server_gate_payload_includes_decision_records():
     assert "TRANSCRIPT-SECRET" not in json.dumps({**out, **st}, ensure_ascii=False)
     assert app.gate_decisions("G1")["decision_records"] == st["gate_decisions"]
     app.S.reset(True)
+
+
+# Review cuối #4: lượt nói không phải JSON → chỉ ghi placeholder, không giữ text thô của LLM
+def test_non_json_turn_keeps_no_raw_text():
+    from src.agents import e2_cos
+    from src.orchestrator import team_feed
+    secret = "<thinking>margin nội bộ 8%, đừng nói với khách</thinking> {broken"
+    base = _sender(converge_at=1)
+    seen = []
+
+    def send(model, system, messages, max_tokens):
+        seen.append(json.dumps(messages, ensure_ascii=False))
+        if "PROPOSER" in system:
+            return secret, {"total_tokens": 10}
+        return base(model, system, messages, max_tokens)
+    b = _board()
+    assert _run(b, send)["ok"]
+    log = b.get("huddle_log")
+    prop = [e for e in log if e["role"] == "proposer"]
+    assert prop and all(e["summary"] == huddle.INVALID_TURN for e in prop)
+    blob = json.dumps({"log": log, "rec": b.get("decision_records"),
+                       "feed": team_feed.build(b), "cos": e2_cos.gather(b, "tình hình?")}, ensure_ascii=False)
+    assert "margin" not in blob and "thinking" not in blob
+    assert not any("margin" in m for m in seen[1:])        # không đưa lại vào transcript cho lượt sau

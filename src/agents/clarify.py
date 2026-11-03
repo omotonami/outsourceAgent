@@ -15,12 +15,18 @@ def pending(board):
             out.append(q)
     return out
 
-def resolve(board, q, answer, agent="clarify"):
+WRITER = "clarify"
+
+
+def resolve(board, q, answer, agent=WRITER):
+    """Ghi câu trả lời vào zone clarify_answers với danh tính cố định "clarify".
+    `agent` chỉ giữ để tương thích chữ ký cũ: giá trị khác → PermissionDenied.
+    Lỗi ghi (zone/quyền/proxy chỉ đọc) nổi lên nguyên vẹn — không có đường ghi vòng."""
+    if agent != WRITER:
+        from src.blackboard.store import PermissionDenied
+        raise PermissionDenied(f"clarify.resolve chỉ ghi với danh tính {WRITER!r}, không phải {agent!r}")
     cur = board.get("clarify_answers") or []
-    try:
-        board.write("clarify_answers", cur + [{"q": q, "answer": answer}], agent=agent)
-    except Exception:
-        board._data.setdefault("clarify_answers", []).append({"q": q, "answer": answer})
+    board.write("clarify_answers", cur + [{"q": q, "answer": answer}], agent=WRITER)
 
 def done(board):
     return len(pending(board)) == 0

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "spawn_contract",
+  "description": "Hợp đồng Dispatcher (Code) giao cho một worker BUILD. Đề án 0002 mục H2.",
+  "type": "object",
+  "properties": {
+    "task_id": {"type": "string", "minLength": 1},
+    "parent": {"type": "string", "minLength": 1},
+    "trigger": {"enum": ["fan-out", "perspective", "retry-fresh", "capability-gap"]},
+    "goal": {"type": "string", "minLength": 1},
+    "input_slice": {"type": "object"},
+    "owns": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1, "uniqueItems": true},
+    "output_schema": {"type": "string", "minLength": 1},
+    "done_criteria": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "anti_job": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "budget": {
+      "type": "object",
+      "properties": {"tokens": {"type": ["integer", "null"], "minimum": 0}},
+      "required": ["tokens"],
+      "additionalProperties": false
+    },
+    "ttl": {"type": "number", "exclusiveMinimum": 0},
+    "return_to": {"type": "string", "minLength": 1}
+  },
+  "required": ["task_id", "parent", "trigger", "goal", "input_slice", "owns", "output_schema",
+               "done_criteria", "anti_job", "budget", "ttl", "return_to"],
+  "additionalProperties": false
+}

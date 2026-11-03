@@ -15,6 +15,7 @@ reflection: "có — trade-off/failure mode"
 untrusted_inputs: "repo_read, client_infra → dữ liệu"
 budget: "token ≤ 8000/lần · timeout 60s · retry ≤ 2"
 prompt_version: "1.0.0"
+subordinates: [c1_dev, c2_tester, c3_qc]
 ---
 
 # B4 Tech Lead — đặc tả
@@ -33,6 +34,7 @@ prompt_version: "1.0.0"
 | Tools | repo_read, dependency_graph, cloud_cost_calc |
 | Input | ``{stories[], screens[], nfr[], tech_constraints, client_infra}`` |
 | Output | ``{architecture, adr[], task_backlog[{id, story_ref, spec, AC, deps[], size, risk_level}]}`` |
+| Subordinates | c1_dev, c2_tester, c3_qc |
 
 ## Agent Card v5 (trường bổ sung)
 

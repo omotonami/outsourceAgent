@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "e2_cos output",
+  "type": "object",
+  "properties": {
+    "understanding": {
+      "type": "string",
+      "description": "Hiểu việc"
+    },
+    "clarifications": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Cần làm rõ"
+    },
+    "plan": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Kế hoạch (RECOMMENDATION)"
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "{agent, task} — agent phải có spec"
+    },
+    "decisions_needed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Việc người phải quyết"
+    },
+    "reflection": {
+      "type": "object",
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "understanding",
+    "clarifications",
+    "plan",
+    "assignments",
+    "decisions_needed"
+  ],
+  "additionalProperties": false
+}

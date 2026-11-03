@@ -1,0 +1,19 @@
+---
+name: cos-team
+description: "Kinh nghiệm team cho E2 Chief of Staff — chỉ THÊM vào Module 3"
+role: cos
+layer: team
+owner: "<skill-owner>"
+version: 0.1.0
+applies_when: {}        # vd: {domain: [banking, insurance], client_country: SG}
+injects_into: "MODULE 3 / Additional guidance"   # chỉ được THÊM, không sửa Module 1/2/4
+---
+
+## Heuristic (ADD vào Module 3)
+- <heuristic định tính đã được promote; KHÔNG đặt con số effort/rate ở đây>
+
+## Checklist thêm cho Reflection
+- [ ] <mục kiểm tra thêm>
+
+> Lớp này chỉ bổ sung kinh nghiệm. Mọi Forbidden và Output contract trong
+> specs/02_agents/e2_cos.md vẫn có hiệu lực cao nhất.

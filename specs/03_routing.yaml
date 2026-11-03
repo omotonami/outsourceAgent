@@ -17,3 +17,4 @@ agents:
   d1_soc:        {triage: haiku, remediation: sonnet}
   factory_interviewer: {default: sonnet, escalate_to: opus}  # factory: phase=factory risk=normal
   huddle:        {default: sonnet, escalate_to: opus}  # H3: tier cho mọi lượt nói trong huddle
+  e2_cos: {default: sonnet, escalate_to: opus}  # factory: phase=presales risk=normal

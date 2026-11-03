@@ -17,7 +17,7 @@ from src.blackboard.store import Blackboard, PermissionDenied
 from src.common.config import ConfigError
 from src.governance import confirm
 from src.iso import conformance, impact, inventory
-from src.orchestrator import gate_view, team_feed
+from src.orchestrator import gate_view, room_state, team_feed
 from src.orchestrator import status as pstatus
 from src.orchestrator.autonomy import Autonomy
 from src.server import demo
@@ -205,3 +205,35 @@ def feed(limit: int = 100):
     """H5 Team feed (chỉ đọc): timeline ASSIGN/SPAWN/RESULT/BLOCKED/DECISION/KILL + cây spawn.
     Chỉ summary — không raw thinking/transcript (src/orchestrator/team_feed.py)."""
     return team_feed.build(S.board, limit=max(1, min(int(limit), FEED_LIMIT_MAX)))
+
+
+def _step_agents(st):
+    """Agent (có spec) của một bước demo: STEP_AGENT theo k, không thì writer các zone bước đó ghi."""
+    cand = [demo.STEP_AGENT[st["k"]]] if st.get("k") in demo.STEP_AGENT else \
+        [demo.ZONE_WRITER.get(z) for z in st.get("writes", [])]
+    return [a for a in cand if a in AGENT_IDS]
+
+
+def _room_levels():
+    """Mức autonomy cao nhất của mỗi agent (L0–L2). Lỗi đọc state/config → {} (view chỉ đọc)."""
+    try:
+        ax = _autonomy()
+        tts = set((ax.cfg.get("gate_task_types") or {}).values()) | {"build_task"}
+        return {a: max((ax.level(a, tt) for tt in tts), default="L0") for a in AGENT_IDS}
+    except REVIEW_LOG_ERRORS:
+        return {}
+
+
+@app.get("/api/room")
+def room(limit: int = room_state.EVENT_LIMIT):
+    """Phòng 3D (chỉ đọc): agent + trạng thái, task, event trao đổi (chỉ summary, không raw thinking)."""
+    cur = S.steps[S.i] if S.i < len(S.steps) else {}
+    gate = {"id": cur["gate"], "agents": _gate_agents(S.i)} if cur.get("gate") else None
+    active = [] if gate or not cur else _step_agents(cur)
+    return room_state.snapshot(S.board, active=active, gate=gate, levels=_room_levels(),
+                               limit=max(1, min(int(limit), FEED_LIMIT_MAX)))
+
+
+@app.get("/room", response_class=HTMLResponse)
+def room_page():
+    return (HERE/"static"/"room.html").read_text(encoding="utf-8")

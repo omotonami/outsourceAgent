@@ -21,6 +21,7 @@ hoặc có file đợt chưa có dòng trong mục lục dưới đây.
 ## Mục lục
 | Ngày | Đợt | Tóm tắt | Commit range |
 |---|---|---|---|
+| 2026-11-03 | [Biên bản review](2026-11-03_review-records.md) | Biên bản 2 vòng review của bot Soi: vòng 1 FAIL, vòng 2 PASS có điều kiện | `b7731d3..0820ef4` |
 | 2026-11-03 | [v3 bot team](2026-11-03_v3-bot-team.md) | Đề án 0002: H1 Factory · H2 Dispatcher · H3 Huddle · H4 Autonomy L0–L2 · H5 CoS/Team feed/Figma + 2 vòng review + refactor (28 → 370 test) | `b7731d3..0d87bd5` |
 | 2026-11-04 | [Phòng 3D + realtime](2026-11-04_room-3d-realtime.md) | Phòng 3D chỉ đọc, event store SQLite + SSE, token đã đốt; quyết định 05:27 (370 → 396 test) | `0d87bd5..0c2ed08` |
 | 2026-11-04 | [Quản trị: lịch sử + xác nhận người](2026-11-04_governance-history.md) | docs/history, luật 9–10 trong CLAUDE.md, `history_check`, CLI Factory bắt xác nhận tương tác | `0c2ed08..` (nhánh `feat/v3-bot-team`) |

@@ -7,6 +7,8 @@
   * NFR không được story nào phủ (story.nfr_refs chứa id, hoặc text NFR xuất hiện trong story).
 - Không trigger lại nếu decision_records đã có record cùng (phase, trigger).
 Trả dict {phase, trigger, question, context} để truyền cho `src.agents.huddle.run`, hoặc None.
+- H4: nếu truyền `autonomy`, huddle tự kích (trigger="routine") chỉ chạy khi
+  `autonomy.can_run("huddle", <phase>, trigger)` cho phép; không → None.
 """
 from pathlib import Path
 
@@ -95,9 +97,11 @@ def discovery(board):
             "context": {"conflicts": found}}
 
 
-def check(board, phase):
+def check(board, phase, autonomy=None, trigger="routine"):
     """Điểm vào duy nhất cho orchestrator: phase 'PRESALES'/'DISCOVERY' (không phân biệt hoa thường)."""
     p = (phase or "").lower()
+    if autonomy is not None and not autonomy.can_run("huddle", p, trigger)["allowed"]:
+        return None
     if p == "presales":
         return presales(board)
     if p == "discovery":

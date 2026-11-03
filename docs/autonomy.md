@@ -1,0 +1,36 @@
+# Autonomy Ladder (H4 — đề án 0002) — chỉ L0–L2
+
+**L3 Auto-gate (gate tự ký, kể cả G3): BẢO LƯU** theo quyết định chủ repo. Không có code path nào ký gate;
+`HARD_MAX = 2` trong `src/orchestrator/autonomy.py` — config `max_level: L3` hay state sửa tay vẫn bị khoá ở L2.
+
+| Mức | Nghĩa | Trigger được chạy | Người duyệt |
+|---|---|---|---|
+| L0 Manual | Người kích hoạt từng lần (mặc định agent mới / chưa có dữ liệu) | `manual` | mọi output |
+| L1 Skill | Chạy với skill đã promote, khi người kích hoạt | `manual` | mọi output |
+| L2 Routine | Tự chạy theo trigger | `manual`, `routine`, `schedule`, `event` | ở gate như cũ |
+
+Mọi số ở `config/autonomy.yaml` (ngưỡng, số mức hạ, trigger, cặp ghim — `e1_pm` ghim L0).
+
+## Luồng (`Autonomy`, theo cặp `(agent_id, task_type)`)
+- State: `eval/runs/autonomy_state.json` (inject `state_path` cho test). Không có cặp = L0.
+- `record_review(agent, task_type, gate, reviewer, edited=False)` — ghi `eval/runs/autonomy_reviews.jsonl`
+  khi người duyệt ở gate. Chỉ ghi log, **không ký gate**.
+- `evaluate(board, eval_results)` đọc reviews + `gate_feedback.jsonl` + `revision_log` (kind=edit) +
+  regression (`eval/runs/eval_regression.jsonl` hoặc tham số):
+  - **Nâng = đề xuất**: đủ `promote.consecutive_approvals.L<n>` lần duyệt liên tiếp không sửa kể từ lần
+    đổi mức gần nhất → `pending`. Chưa có hiệu lực.
+  - **Hạ = tự động, ngay**: revision / gate edit / regression → hạ `demote.on_*` mức, huỷ pending,
+    ghi `risk_register` (phase `autonomy`). Mỗi bằng chứng chỉ tính một lần (mốc `since`).
+- `promote(agent, task_type, approved_by=<người>)` — chỉ khi có pending; từ chối approver rỗng, bot
+  (`reject_approvers`, `auto*`) hoặc chính agent; từ chối đích > L2. `reject(...)` bác đề xuất.
+- `report_incident(agent, task_type, reason, board)` → về `demote.on_incident` (L0).
+- `can_run(agent, task_type, trigger)` → `{allowed, level, review, reason}`.
+
+## Tích hợp
+- Dispatcher: `Dispatcher(..., trigger="manual", autonomy=None)`. Trước mỗi spawn hỏi
+  `can_run(task.agent or "c1_dev", task.type or "build_task", trigger)`; bị chặn → task giữ `ready`,
+  sự kiện `BLOCKED` `reason="autonomy"` (1 lần/run), `summary.autonomy_denied`. Mặc định `manual` = hành vi cũ.
+- Huddle: `huddle_trigger.check(board, phase, autonomy=ax, trigger="routine")` → agent `huddle`,
+  task_type = phase. Không truyền `autonomy` = hành vi cũ.
+
+Không đổi `gates.py`, guard, specs. Test: `tests/contract/test_autonomy.py`.

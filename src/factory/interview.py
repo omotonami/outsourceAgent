@@ -112,8 +112,18 @@ def _fields(raw, what):
 
 def build_spec(record: dict, root=ROOT) -> dict:
     """Bản ghi đã xác nhận (confirm) -> spec dict chuẩn hoá. Raise ValueError nếu thiếu/sai."""
-    a = confirmed_answers(record)
+    return _spec_from_answers(confirmed_answers(record), root)
 
+
+def preview_spec(answers: dict, root=ROOT) -> dict:
+    """Spec dựng từ answers CHƯA xác nhận — CHỈ để hiển thị cho người trước khi xác nhận
+    (CLI new --write). Không dùng kết quả để ghi: scaffold chỉ nhận spec từ build_spec(record)."""
+    if not isinstance(answers, dict):
+        raise ValueError("answers phải là mapping")
+    return _spec_from_answers({k: answers[k] for k in ANSWER_KEYS if k in answers}, root)
+
+
+def _spec_from_answers(a: dict, root) -> dict:
     aid = str(a.get("id", "")).strip()
     if not ID_RE.match(aid):
         raise ValueError(f"id {aid!r} không đúng dạng <chữ><số>_<role> (vd x9_demo)")
@@ -193,7 +203,11 @@ def draft_from_llm(idea: str, sender=None, project_id="factory") -> dict:
 
 def confirm(draft: dict, edits: dict | None = None, *, confirmed_by: str) -> dict:
     """Người xác nhận bản nháp (hoặc answers thô), có thể kèm sửa -> bản ghi cho build_spec:
-    {confirmed: True, confirmed_by, answers (chỉ khoá QUESTIONS), answers_hash, dropped_keys}."""
+    {confirmed: True, confirmed_by, answers (chỉ khoá QUESTIONS), answers_hash, dropped_keys}.
+
+    CLAUDE.md luật 10: bot/agent KHÔNG được gọi hàm này với danh tính người tự điền. API Python giữ cho
+    test và cho kênh đã xác thực người (CLI `src.factory.new --write` gọi sau khi chính người gõ tên +
+    "XAC NHAN" trong terminal tương tác). confirmed_by phải do người cung cấp, không suy ra/điền thay."""
     who = human.require_human(confirmed_by, ValueError, "confirmed_by phải là người, không phải {who!r}")
     base = draft.get("answers", draft) if isinstance(draft, dict) else {}
     merged = {**base, **(edits or {})}

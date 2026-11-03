@@ -1,5 +1,6 @@
 """H1 Agent Factory: sinh x9_demo trong tmp_path (KHÔNG ghi repo thật) → lint pass → test sinh ra pass;
 lint bắt lỗi cố ý; scaffold không ghi đè; draft LLM chỉ là RECOMMENDATION."""
+import io
 import json
 import os
 import re
@@ -255,7 +256,22 @@ def test_scaffold_never_overwrites(built, repo):
                                                root=fresh), root=fresh)
 
 
-def test_cli_new_dry_run_and_write(tmp_path, capsys):
+class _Stdin(io.StringIO):
+    """stdin giả: isatty() cấu hình được (mock TTY), đọc dòng người gõ."""
+
+    def __init__(self, text="", tty=True):
+        super().__init__(text)
+        self._tty = tty
+
+    def isatty(self):
+        return self._tty
+
+
+def _human_types(monkeypatch, name="daipc", word=new.CONFIRM_WORD, tty=True):
+    monkeypatch.setattr(new.sys, "stdin", _Stdin(f"{name}\n{word}\n", tty=tty))
+
+
+def test_cli_new_dry_run_and_write(tmp_path, capsys, monkeypatch):
     root = _minimal_repo(tmp_path / "r")
     sp = tmp_path / "spec.yaml"
     sp.write_text(yaml.safe_dump(ANSWERS, allow_unicode=True), encoding="utf-8")
@@ -263,9 +279,66 @@ def test_cli_new_dry_run_and_write(tmp_path, capsys):
     assert new.main(["--spec", str(sp), "--root", str(root)]) == 2          # chưa xác nhận → chặn
     assert new.main(["--spec", str(sp), "--root", str(root)] + by) == 0
     assert not (root / "src/agents/x9_demo.py").exists()
-    assert new.main(["--spec", str(sp), "--root", str(root), "--write"] + by) == 0
-    assert "agent_lint: PASS" in capsys.readouterr().out
-    assert new.main(["--spec", str(sp), "--root", str(root), "--write"] + by) == 2   # lần 2: không đè
+    _human_types(monkeypatch)
+    assert new.main(["--spec", str(sp), "--root", str(root), "--write"]) == 0
+    out = capsys.readouterr().out
+    assert "agent_lint: PASS" in out
+    assert interview.answers_hash(ANSWERS) in out and "xác nhận: daipc" in out   # tóm tắt có hash
+    _human_types(monkeypatch)
+    assert new.main(["--spec", str(sp), "--root", str(root), "--write"]) == 2   # lần 2: không đè
+
+
+# ---------- CLAUDE.md luật 10: --write chỉ nhận xác nhận tương tác do người gõ ----------
+def _spec_file(tmp_path, data=ANSWERS):
+    sp = tmp_path / "spec.yaml"
+    sp.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    return sp
+
+
+def test_cli_write_refused_without_tty(tmp_path, capsys, monkeypatch):
+    root = _minimal_repo(tmp_path / "r")
+    sp = _spec_file(tmp_path, _ok(ANSWERS, by="daipc"))     # kể cả bản ghi đã có confirmed_by
+    _human_types(monkeypatch, tty=False)
+    assert new.main(["--spec", str(sp), "--root", str(root), "--write"]) == 2
+    assert "TTY" in capsys.readouterr().err
+    assert not (root / "src/agents/x9_demo.py").exists()
+
+
+def test_cli_write_rejects_confirmed_by_arg(tmp_path, capsys, monkeypatch):
+    root = _minimal_repo(tmp_path / "r")
+    sp = _spec_file(tmp_path)
+    _human_types(monkeypatch)
+    assert new.main(["--spec", str(sp), "--root", str(root), "--write", "--confirmed-by", "daipc"]) == 2
+    assert "luật 10" in capsys.readouterr().err
+    assert not (root / "src/agents/x9_demo.py").exists()
+
+
+@pytest.mark.parametrize("name,word", [("daipc", "xac nhan"), ("daipc", "yes"), ("e2_cos", new.CONFIRM_WORD),
+                                       ("", new.CONFIRM_WORD), ("gate_ui", new.CONFIRM_WORD)])
+def test_cli_write_refuses_bad_interactive_answer(tmp_path, monkeypatch, name, word):
+    root = _minimal_repo(tmp_path / "r")
+    sp = _spec_file(tmp_path)
+    _human_types(monkeypatch, name=name, word=word)
+    assert new.main(["--spec", str(sp), "--root", str(root), "--write"]) == 2
+    assert not (root / "src/agents/x9_demo.py").exists()
+
+
+def test_cli_write_refuses_tampered_record(tmp_path, monkeypatch):
+    root = _minimal_repo(tmp_path / "r")
+    rec = _ok(ANSWERS)
+    rec["answers"] = {**rec["answers"], "anti_jobs": ["x"]}
+    sp = _spec_file(tmp_path, rec)
+    _human_types(monkeypatch)
+    assert new.main(["--spec", str(sp), "--root", str(root), "--write"]) == 2
+    assert not (root / "src/agents/x9_demo.py").exists()
+
+
+def test_cli_write_eof_refused(tmp_path, monkeypatch):
+    root = _minimal_repo(tmp_path / "r")
+    sp = _spec_file(tmp_path)
+    monkeypatch.setattr(new.sys, "stdin", _Stdin("", tty=True))
+    assert new.main(["--spec", str(sp), "--root", str(root), "--write"]) == 2
+    assert not (root / "src/agents/x9_demo.py").exists()
 
 
 def test_lint_all_runs_on_real_repo(capsys):
@@ -348,12 +421,14 @@ def test_write_refused_off_factory_branch(tmp_path):
         scaffold.scaffold(interview.build_spec(_ok(ANSWERS), root=plain), root=plain, dry_run=False)
 
 
-def test_cli_write_refuses_then_create_branch(tmp_path, capsys):
+def test_cli_write_refuses_then_create_branch(tmp_path, capsys, monkeypatch):
     root = _minimal_repo(tmp_path / "r", branch="main")
     sp = tmp_path / "spec.yaml"
     sp.write_text(yaml.safe_dump(_ok(ANSWERS), allow_unicode=True), encoding="utf-8")   # bản ghi đã xác nhận
+    _human_types(monkeypatch)
     assert new.main(["--spec", str(sp), "--root", str(root), "--write"]) == 2
     assert not (root / "src/agents/x9_demo.py").exists()
+    _human_types(monkeypatch)
     assert new.main(["--spec", str(sp), "--root", str(root), "--write", "--create-branch"]) == 0
     assert git.current_branch(root) == "factory/x9_demo"
     assert (root / "src/agents/x9_demo.py").exists()

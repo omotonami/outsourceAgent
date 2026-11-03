@@ -21,6 +21,7 @@ Số test sau đợt: **407** (396 + 11 mới: 5 CLI xác nhận tương tác, 6
 ## Nhật ký commit của đợt
 1. `docs(history)` — tạo docs/history, commit đề án 0002, link ADR.
 2. `docs(governance)` — CLAUDE.md luật 9–10, ghi chú duyệt card e2_cos, README "10 luật".
+3. `feat(factory)` — CLI `new --write` bắt xác nhận tương tác (TTY + tên + `XAC NHAN`), bỏ `--confirmed-by` khi ghi; `interview.preview_spec`; 9 test mới → 405.
 
 ## Việc còn mở
 - Gắn `history_check --base <nhánh đích>` vào CI khi có remote/CI (hiện chưa push).

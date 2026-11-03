@@ -39,8 +39,8 @@ export ANTHROPIC_API_KEY=sk-...             # để chạy agent thật (python 
 
 ## Tạo agent mới (Factory)
 ```bash
-python -m src.factory.new --spec my_agent.yaml --confirmed-by <người>                          # dry-run
-python -m src.factory.new --spec my_agent.yaml --confirmed-by <người> --write --create-branch  # nhánh factory/<id>
+python -m src.factory.new --spec my_agent.yaml --confirmed-by <người>   # dry-run
+python -m src.factory.new --spec my_agent.yaml --write --create-branch  # nhánh factory/<id>; người gõ tên + "XAC NHAN" trong terminal (luật 10)
 ```
 
 ## Dashboard trực quan

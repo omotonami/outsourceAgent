@@ -24,13 +24,27 @@
 ## Lệnh
 ```bash
 python -m src.factory.new --spec my_agent.yaml --confirmed-by <người>          # dry-run: liệt kê file sẽ ghi
-python -m src.factory.new --spec my_agent.yaml --confirmed-by <người> --write --create-branch
+python -m src.factory.new --spec my_agent.yaml --write --create-branch          # người chạy trong terminal
+                                                      # → hiện tóm tắt card + answers_hash
+                                                      # → người gõ tên + gõ lại "XAC NHAN"
                                                       # ghi trên nhánh factory/<id> (tự tạo/chuyển) + agent_lint
                                                       # → PR → người duyệt (không merge thẳng, không push)
 python -m src.factory.agent_lint <id>                 # hoặc --all
 python3 -m pytest -q
 ```
 `my_agent.yaml`: các key như `ANSWERS` trong `tests/contract/test_factory.py`.
+
+## Xác nhận người khi ghi (CLAUDE.md luật 10)
+- `--write` **không nhận** `--confirmed-by` (có → từ chối, rc 2). Danh tính người chỉ vào qua terminal tương tác.
+- Bắt buộc `sys.stdin.isatty()`; không TTY (bot, pipe, CI, subprocess) → từ chối với thông báo rõ, không ghi gì.
+- Trước khi hỏi, CLI kiểm answers hợp lệ (`interview.preview_spec`) và hiện tóm tắt card + `answers_hash`.
+  Người gõ tên (phải là người theo `src/governance/confirm.py`) và gõ lại đúng `XAC NHAN`; sai/EOF → huỷ.
+- `--spec` là bản ghi đã xác nhận trước đó: kiểm hash rồi **vẫn phải xác nhận lại** — `confirmed_by` trong file
+  có thể do bot điền nên không được tin.
+- `--confirmed-by` chỉ còn cho dry-run (không ghi gì). API Python `interview.confirm()` giữ cho test và kênh
+  đã xác thực người; bot không được gọi nó với danh tính người tự điền.
+- Tiền lệ: card `e2_cos` (`fa4b226`) sinh với `--confirmed-by daipc` do bot điền; chủ repo duyệt sau
+  (2026-11-04 05:27) — xem `docs/history/2026-11-04_room-3d-realtime.md`.
 
 ## Luật
 - Agent mới mặc định autonomy **L0**; không chạy thật trước khi PR được duyệt.

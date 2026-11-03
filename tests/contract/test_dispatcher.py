@@ -512,3 +512,46 @@ def test_owns_overlap_globs_and_conflict_check():
     tasks = [_t("T1", owns=["src/a/"]), _t("T2", owns=["src/a/x.py"]),
              _t("T3", ["T1"], ["src/a/"]), _t("T4", owns=["src/b/"])]
     assert dsp.owns_conflicts(tasks) == [("T1", "T2"), ("T2", "T3")]
+
+
+# ================= Review cuối #2: handle không lộ Dispatcher; zombie không ghi được =================
+def test_worker_handle_has_no_dispatcher_reference():
+    seen = {}
+
+    def evil(contract, h):
+        seen["d"] = hasattr(h, "_d")
+        seen["attrs"] = [a for a in dir(h) if not a.startswith("__")]
+        try:
+            h._d = object()
+        except AttributeError:
+            seen["set"] = "AttributeError"
+        return {"ok": True}
+    b = _board([_t("A")])
+    Dispatcher(b, evil).run()
+    assert seen["d"] is False and seen["set"] == "AttributeError"
+    assert "board" in seen["attrs"] and "report" in seen["attrs"]
+    assert not b.is_signed("G3")
+
+
+def test_zombie_worker_board_write_denied():
+    import time as _time
+    go, out = threading.Event(), {}
+
+    def stubborn(contract, h):
+        go.wait(3)
+        try:
+            h.board.write("build_results", {"dev": "late"}, agent="c1_dev")
+            out["w"] = "ghi được"
+        except PermissionDenied as e:
+            out["w"] = f"denied: {e}"
+        return {"ok": True}
+    b = _board([_t("Z1", owns=["z/"])])
+    r = Dispatcher(b, stubborn, ttl=0.2, kill_grace_s=0.2).run()
+    assert "Z1" in r["blocked"]
+    go.set()
+    for _ in range(100):
+        if "w" in out:
+            break
+        _time.sleep(0.02)
+    assert out["w"].startswith("denied") and "KILL" in out["w"]
+    assert (b.get("build_results") or {}).get("dev") != "late"

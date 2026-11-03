@@ -14,21 +14,33 @@ if TYPE_CHECKING:
 
 
 class WorkerHandle:
-    """Cái duy nhất worker nhận ngoài contract: báo substate, board proxy, biết khi bị KILL."""
+    """Cái duy nhất worker nhận ngoài contract: báo substate, board proxy, biết khi bị KILL.
+
+    KHÔNG giữ tham chiếu tới Dispatcher (không có `_d`, `__slots__` chặn thêm thuộc tính): việc báo
+    substate đi qua một closure `report` tạo lúc khởi tạo. Đây là rào chống dùng nhầm, không phải sandbox.
+    """
+    __slots__ = ("task_id", "cancelled", "board", "zombie", "finished", "_report")
 
     def __init__(self, dispatcher: "Dispatcher", task_id: str, board: WorkerBoard | None = None):
-        self._d, self.task_id = dispatcher, task_id
+        self.task_id = task_id
         self.cancelled = threading.Event()
         self.board = board
         self.zombie = False
         self.finished = False
+        set_status = dispatcher._set_status
+        handle = self
+
+        def _report(substate: str) -> None:
+            set_status(task_id, substate, _handle=handle)   # kiểm lại cancelled trong lock
+
+        self._report = _report
 
     def report(self, substate: str) -> None:
         if substate not in WORKER_STATES:
             raise PermissionError(f"worker chỉ được báo {WORKER_STATES}, không được '{substate}'")
         if self.cancelled.is_set():
             return
-        self._d._set_status(self.task_id, substate, _handle=self)   # kiểm lại cancelled trong lock
+        self._report(substate)
 
 
 Worker = Callable[[dict, WorkerHandle], dict]

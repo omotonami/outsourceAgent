@@ -113,7 +113,9 @@ class Scheduler:
             except ledger.BudgetExceeded as e:
                 self._over_budget([x["id"] for x in ready if x["id"] not in busy], str(e))
                 break
-            handle = WorkerHandle(self, t["id"], WorkerBoard(self.board, self.worker_agents))
+            handle = WorkerHandle(self, t["id"])
+            handle.board = WorkerBoard(self.board, self.worker_agents,
+                                       cancelled=lambda h=handle: h.cancelled.is_set(), lock=self._lock)
             self._set_status(t["id"], "in_dev")
             self._event("ASSIGN", t["id"], agent=agent, task_type=task_type, trigger=trigger)
             self._event("SPAWN", t["id"], trigger=trigger, owns=owns,

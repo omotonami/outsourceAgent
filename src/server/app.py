@@ -14,6 +14,7 @@ from jsonschema import ValidationError
 
 from src.agents import e1_pm
 from src.blackboard.store import Blackboard, PermissionDenied
+from src.common.config import ConfigError
 from src.iso import conformance, impact, inventory
 from src.orchestrator import gate_view, team_feed
 from src.orchestrator import status as pstatus
@@ -28,6 +29,8 @@ app.mount("/static", StaticFiles(directory=HERE/"static"), name="static")
 ZW = demo.ZONE_WRITER                 # tên cũ
 AGENT_IDS = demo.AGENT_IDS
 FEED_LIMIT_MAX = 500                  # trần số event /api/feed trả về
+REVIEW_LOG_ERRORS = (OSError, ValueError, ConfigError)   # lỗi ghi review autonomy được bắt sau khi ký
+REVIEW_RISK_SEVERITY = "Medium"
 
 
 # ----- state phiên (1 dự án demo) -----
@@ -70,6 +73,19 @@ def _record_gate_reviews(idx, gid, reviewer):
     tt = (ax.cfg.get("gate_task_types") or {}).get(gid, gid.lower())
     return [ax.record_review(a, tt, gid, reviewer=reviewer, edited=False, approved=True)
             for a in _gate_agents(idx)]
+
+
+def _record_reviews_safely(idx, gid, reviewer):
+    """Chữ ký gate đã có hiệu lực: lỗi ghi review autonomy (file log, config) KHÔNG làm request lỗi —
+    ghi risk_register (writer gate_ui) để người xử lý. Lỗi khác vẫn nổi lên."""
+    try:
+        return _record_gate_reviews(idx, gid, reviewer)
+    except REVIEW_LOG_ERRORS as e:
+        msg = f"Gate {gid} đã ký nhưng không ghi được review autonomy: {type(e).__name__}: {e}"
+        log.warning(msg)
+        S.board.append("risk_register", {"risk": msg, "severity": REVIEW_RISK_SEVERITY, "status": "open",
+                                         "phase": "autonomy", "gate": gid}, agent="gate_ui")
+        return None
 
 
 def _update_status():
@@ -140,7 +156,7 @@ def gate(decision: str, edited: bool = False, reviewer: str = "human"):
     if decision == "approve":
         S.signed[gid] = "approved"; S.board.sign(gid, by="human", via="gate_ui")
         if not edited:
-            _record_gate_reviews(S.i, gid, reviewer)
+            _record_reviews_safely(S.i, gid, reviewer)
         S.i += 1
     else:
         S.signed[gid] = "rejected"

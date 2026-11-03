@@ -1,6 +1,6 @@
 """H3 — quyết định CÓ huddle hay không. Code thuần, KHÔNG LLM.
 
-- PRESALES: len(business_context.ambiguities) ≥ huddle.presales_ambiguity_threshold (config, mặc định 3).
+- PRESALES: len(business_context.ambiguities) ≥ huddle.presales_ambiguity_threshold (config, bắt buộc).
 - DISCOVERY: xung đột phát hiện bằng Code giữa requirements (B1) ↔ design_spec (B2) ↔ NFR:
   * story không có screen nào trỏ tới (screen.story_refs chứa story.id / "S<n>" / i_want),
   * screen trỏ tới story không tồn tại,
@@ -10,17 +10,13 @@ Trả dict {phase, trigger, question, context} để truyền cho `src.agents.hu
 - H4: nếu truyền `autonomy`, huddle tự kích (trigger="routine") chỉ chạy khi
   `autonomy.can_run("huddle", <phase>, trigger)` cho phép; không → None.
 """
-from pathlib import Path
-
-import yaml
-
-ROOT = Path(__file__).parents[2]
-DEFAULT_THRESHOLD = 3
+from src.common import config
 
 
-def _cfg():
-    cfg = yaml.safe_load((ROOT / "config/budgets.yaml").read_text(encoding="utf-8")) or {}
-    return cfg.get("huddle") or {}
+def _threshold() -> int:
+    """huddle.presales_ambiguity_threshold (config/budgets.yaml). Thiếu → ConfigError."""
+    return int(config.require(config.load_yaml(config.BUDGETS), "huddle.presales_ambiguity_threshold",
+                              config.BUDGETS))
 
 
 def _already(board, phase, trigger):
@@ -31,7 +27,7 @@ def _already(board, phase, trigger):
 def presales(board, threshold=None):
     bc = board.get("business_context") or {}
     amb = bc.get("ambiguities") or []
-    th = threshold if threshold is not None else (_cfg().get("presales_ambiguity_threshold") or DEFAULT_THRESHOLD)
+    th = threshold if threshold is not None else _threshold()
     if len(amb) < th or _already(board, "presales", "ambiguities"):
         return None
     return {"phase": "presales", "trigger": "ambiguities",

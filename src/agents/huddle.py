@@ -12,23 +12,23 @@ Vai: Proposer (agent chủ phase) → Critic (agent phase kề) → Decider (age
 Việc quyết CÓ huddle hay không là Code: `src/orchestrator/huddle_trigger.py`.
 """
 import json
-from pathlib import Path
 
-import yaml
 from jsonschema import ValidationError, validate
 
-from src.gateway import budget, llm_client, router
 from src.agents.runtime import _extract_json
+from src.common import config as cfgload
+from src.gateway import budget, llm_client, router
 
-ROOT = Path(__file__).parents[2]
+ROOT = cfgload.ROOT
 AGENT = "huddle"
 ZONES = ("huddle_log", "decision_records")   # zone DUY NHẤT huddle được chạm tới
-RECORD_SCHEMA = json.loads((ROOT / "specs/04_schemas/decision_record.json").read_text(encoding="utf-8"))
+RECORD_SCHEMA = cfgload.load_json("specs/04_schemas/decision_record.json")
+_SRC = f"{cfgload.BUDGETS} → huddle"
 
 
 def config():
-    cfg = yaml.safe_load((ROOT / "config/budgets.yaml").read_text(encoding="utf-8")) or {}
-    return cfg.get("huddle") or {}
+    """Section `huddle` của config/budgets.yaml ({} nếu không có)."""
+    return cfgload.load_yaml(cfgload.BUDGETS).get("huddle") or {}
 
 
 def _append(board, zone, entry, agent):
@@ -74,9 +74,9 @@ class _Run:
         self.board, self.phase, self.question = board, phase, question
         self.context, self.ctx, self.sender, self.trigger = context or {}, ctx, sender, trigger
         self.roles = roles
-        self.max_rounds = int(cfg.get("max_rounds") or 3)
-        self.cap = cfg.get("tokens")
-        self.retries = int(cfg.get("decider_retries", 1))
+        self.max_rounds = int(cfgload.require(cfg, "max_rounds", _SRC))
+        self.cap = cfgload.require(cfg, "tokens", _SRC, nullable=True)
+        self.retries = int(cfgload.require(cfg, "decider_retries", _SRC))
         self.used = 0
         self.transcript = []                   # chỉ trong bộ nhớ + huddle_log; không lên gate
         self.options, self.risks, self.open_qs = [], [], []

@@ -1,8 +1,7 @@
 """Quy tắc escalate sang người."""
-from pathlib import Path
-import yaml
+from src.common import config
 
-MAX_LOOPS = yaml.safe_load((Path(__file__).parent / "transitions.yaml").read_text(encoding="utf-8"))["max_build_loops"]
+MAX_LOOPS = config.require(config.load_yaml(config.TRANSITIONS), "max_build_loops", config.TRANSITIONS)
 
 
 def should_escalate(loops: int, tier: str, failed: bool, over_budget: bool) -> str | None:

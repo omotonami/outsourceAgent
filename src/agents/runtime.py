@@ -1,19 +1,22 @@
 """Runtime chung cho mọi agent theo framework 4 module.
 Code lo: validate input, nạp skill, gọi LLM, parse+validate JSON, retry, trace.
 Mỗi agent cấp: id, role, phase, post-process hook (deterministic)."""
-import json, re
-from pathlib import Path
-from jsonschema import validate, ValidationError
+import json
+import re
+
+from jsonschema import ValidationError, validate
+
+from src.common import config
 from src.gateway import llm_client, router
 from src.orchestrator import skill_loader
 
-ROOT = Path(__file__).parents[2]
+ROOT = config.ROOT
 SPECS = ROOT / "specs/02_agents"
 SCHEMAS = ROOT / "specs/04_schemas"
 
 
 def _schema(name):
-    return json.loads((SCHEMAS / name).read_text(encoding="utf-8"))
+    return config.load_json(SCHEMAS / name)
 
 
 def _prompt(agent_id):

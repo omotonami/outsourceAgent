@@ -1,11 +1,12 @@
 """Điểm DUY NHẤT gọi model. Enforce provider/region, PII mask, budget, trace.
 Cần: pip install anthropic ; biến môi trường ANTHROPIC_API_KEY."""
 import json
-from pathlib import Path
-import yaml
-from . import pii_mask, budget, trace
 
-_LOCK = yaml.safe_load((Path(__file__).parents[2] / "config/models.lock").read_text(encoding="utf-8"))
+from src.common import config
+
+from . import budget, pii_mask, trace
+
+_LOCK = config.load_yaml(config.MODELS_LOCK)
 _client = None
 
 

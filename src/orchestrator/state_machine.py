@@ -1,9 +1,9 @@
 """State machine của Orchestrator. Không bước nào do LLM quyết định."""
-from pathlib import Path
-import yaml
+from src.common import config
+
 from . import gates
 
-_CFG = yaml.safe_load((Path(__file__).parent / "transitions.yaml").read_text(encoding="utf-8"))
+_CFG = config.load_yaml(config.TRANSITIONS)
 ORDER = _CFG["states"]
 
 

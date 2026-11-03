@@ -20,10 +20,10 @@ import time
 from pathlib import Path
 from typing import Callable
 
-import yaml
+from src.common import config as cfgload, jsonl
 
-ROOT = Path(__file__).parents[2]
-CONFIG = ROOT / "config/autonomy.yaml"
+ROOT = cfgload.ROOT
+CONFIG = ROOT / cfgload.AUTONOMY
 STATE = ROOT / "eval/runs/autonomy_state.json"
 REVIEWS = ROOT / "eval/runs/autonomy_reviews.jsonl"
 FEEDBACK = ROOT / "eval/runs/gate_feedback.jsonl"
@@ -52,20 +52,6 @@ def _name(n: int) -> str:
     return f"L{n}"
 
 
-def _read_jsonl(path: Path | None) -> list[dict]:
-    if not path or not Path(path).exists():
-        return []
-    out = []
-    for line in Path(path).read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line:
-            try:
-                out.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    return out
-
-
 def _match(entry: dict, agent: str, task_type: str) -> bool:
     """Entry khớp cặp: cùng agent; nếu entry có task_type thì phải trùng (không có = áp cả agent —
     thận trọng: gate_feedback cũ / revision_log không ghi task_type thì hạ mọi task_type của agent)."""
@@ -82,7 +68,7 @@ class Autonomy:
         if isinstance(config, dict):
             cfg = config
         else:
-            cfg = yaml.safe_load(Path(config or CONFIG).read_text(encoding="utf-8")) or {}
+            cfg = cfgload.load_yaml(Path(config or CONFIG))
         self.cfg = cfg
         self.max_level = min(_num(cfg.get("max_level", "L0")), HARD_MAX)   # config sai vẫn khoá L2
         lv = cfg.get("levels") or {}
@@ -162,21 +148,18 @@ class Autonomy:
         """Ghi kết quả người duyệt ở gate cho output của cặp. CHỈ ghi log — không ký gate."""
         e = {"ts": self._now(), "agent": agent, "task_type": task_type, "gate": gate,
              "reviewer": reviewer, "approved": bool(approved), "edited": bool(edited)}
-        self.reviews_log.parent.mkdir(parents=True, exist_ok=True)
-        with self.reviews_log.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(e, ensure_ascii=False) + "\n")
-        return e
+        return jsonl.append(self.reviews_log, e)
 
     # ---------- đánh giá ----------
     def evaluate(self, board=None, eval_results: list[dict] | None = None) -> dict:
         """Hạ ngay (có hiệu lực) khi có bằng chứng xấu; nâng chỉ ĐỀ XUẤT (pending)."""
         st = self._load()
-        reviews = _read_jsonl(self.reviews_log)
-        feedback = _read_jsonl(self.feedback_log)
+        reviews = jsonl.read(self.reviews_log)
+        feedback = jsonl.read(self.feedback_log)
         revisions = [e for e in ((board.get("revision_log") if board is not None else None) or [])
                      if e.get("kind", "edit") == "edit"]
         fresh = [{"ts": self._now(), **e} for e in (eval_results or [])]   # truyền trực tiếp = kết quả mới
-        regressions = [e for e in _read_jsonl(self.regression_log) + fresh if e.get("regression")]
+        regressions = [e for e in jsonl.read(self.regression_log) + fresh if e.get("regression")]
         for e in reviews:
             self._pair(st, e["agent"], e["task_type"])
         proposals, demotions = [], []

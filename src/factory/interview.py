@@ -12,7 +12,9 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).parents[2]
+from src.common import config
+
+ROOT = config.ROOT
 
 ID_RE = re.compile(r"^[a-z][0-9]+_[a-z][a-z0-9_]*$")
 FIELD_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -43,7 +45,7 @@ ANSWER_KEYS = [k for q in QUESTIONS for k in q["keys"]]
 
 
 def _budgets(root=ROOT):
-    return yaml.safe_load((Path(root) / "config/budgets.yaml").read_text(encoding="utf-8")) or {}
+    return config.load_yaml(config.BUDGETS, root)
 
 
 def phases(root=ROOT):

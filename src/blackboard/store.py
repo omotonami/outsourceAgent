@@ -1,16 +1,18 @@
 """Blackboard: shared state, ghi theo vùng có kiểm tra quyền + schema."""
-import copy, json
+import copy
 from pathlib import Path
-import yaml
+
 from jsonschema import validate
+
+from src.common import config
 
 _HERE = Path(__file__).parent
 # Một nguồn duy nhất: specs/05_blackboard.yaml (không còn bản sao src/blackboard/permissions.yaml — 2026-11-03).
-ZONES_FILE = _HERE.parents[1] / "specs/05_blackboard.yaml"
-_PERM = yaml.safe_load(ZONES_FILE.read_text(encoding="utf-8"))["zones"]
+ZONES_FILE = config.path("specs/05_blackboard.yaml")
+_PERM = config.require(config.load_yaml(ZONES_FILE), "zones", "specs/05_blackboard.yaml")
 GATE_UI = "gate_ui"
 # Danh tính máy (agent/hệ thống) không bao giờ được ký gate, kể cả khi khai via=gate_ui.
-_AGENT_IDS = {p.stem for p in (_HERE.parents[1] / "specs/02_agents").glob("*.md")}
+_AGENT_IDS = config.agent_ids()
 _MACHINE_IDS = ({w for z in _PERM.values() for w in z["writers"]} | _AGENT_IDS
                 | {"orchestrator", "gateway", "dispatcher"}) - {GATE_UI}
 
@@ -20,8 +22,9 @@ class PermissionDenied(Exception):
 
 
 def _schema(zone):
+    """Schema zone (src/blackboard/schema/<zone>.json) hoặc None nếu zone không có schema."""
     p = _HERE / "schema" / f"{zone}.json"
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
+    return config.load_json(p) if p.exists() else None
 
 
 class Blackboard:

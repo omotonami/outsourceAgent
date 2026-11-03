@@ -15,11 +15,9 @@ import contextlib
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
-from pathlib import Path
+from src.common import config
 
-import yaml
-
-_CFG = yaml.safe_load((Path(__file__).parents[2] / "config/budgets.yaml").read_text(encoding="utf-8"))
+_CFG = config.load_yaml(config.BUDGETS)
 _LOCK = threading.RLock()
 _USED: dict[tuple[str, str], int] = defaultdict(int)
 _RESERVED: dict[tuple[str, str], int] = defaultdict(int)

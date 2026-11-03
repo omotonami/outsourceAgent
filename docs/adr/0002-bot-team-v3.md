@@ -1,7 +1,8 @@
 # ADR 0002: Lớp "bot team" v3 trên lõi Code (Factory, Dispatcher, Huddle, Autonomy, CoS)
 
 - Status: Accepted (2026-11-03) — đề án 0002 được chủ repo duyệt; triển khai 5 đợt + refactor trên nhánh `feat/v3-bot-team`.
-- Đề án gốc: `docs/proposals/0002-bot-team-v3.md` (không versioning cùng code; ADR này là bản ghi quyết định).
+- Đề án gốc: [`docs/proposals/0002-bot-team-v3.md`](../proposals/0002-bot-team-v3.md) (đã duyệt, commit vào repo 2026-11-04).
+- Lịch sử triển khai + quyết định theo giờ: [`docs/history/2026-11-03_v3-bot-team.md`](../history/2026-11-03_v3-bot-team.md).
 
 ## Context
 Lõi (state machine Code, guard từng transition, Blackboard phân quyền theo zone, gateway duy nhất ra model,

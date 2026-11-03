@@ -152,9 +152,14 @@ def build_spec(record: dict, root=ROOT) -> dict:
     if risk == "high" and tier == "haiku":
         raise ValueError("risk_level=high không được dùng haiku")
 
-    zone = str(a.get("zone") or f"{role}_output").strip()
-    if not FIELD_RE.match(zone):
-        raise ValueError(f"zone {zone!r} không hợp lệ")
+    # zone: null/"none" (khai rõ) = agent không ghi Blackboard (vd e2_cos, factory_interviewer);
+    # thiếu khoá = mặc định <role>_output.
+    if "zone" in a and (a["zone"] is None or str(a["zone"]).strip().lower() == "none"):
+        zone = None
+    else:
+        zone = str(a.get("zone") or f"{role}_output").strip()
+        if not FIELD_RE.match(zone):
+            raise ValueError(f"zone {zone!r} không hợp lệ")
 
     inp, out = _fields(a.get("input"), "input"), _fields(a.get("output"), "output")
     tools = _list(a.get("tools"))

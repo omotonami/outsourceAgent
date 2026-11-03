@@ -81,6 +81,17 @@ def test_build_spec_rejects_bad_answers():
         interview.build_spec(_ok({**ANSWERS, "phase": "nowhere"}))
 
 
+def test_build_spec_zone_none_means_no_blackboard(tmp_path):
+    """zone: null / "none" khai rõ → agent không ghi Blackboard (không sinh entry zone); thiếu khoá → mặc định."""
+    for z in (None, "none", "None"):
+        assert interview.build_spec(_ok({**ANSWERS, "zone": z}))["zone"] is None
+    no_key = {k: v for k, v in ANSWERS.items() if k != "zone"}
+    assert interview.build_spec(_ok(no_key))["zone"] == "demo_output"
+    root = _minimal_repo(tmp_path / "r")
+    out = scaffold.scaffold(interview.build_spec(_ok({**ANSWERS, "zone": None}), root=root), root=root)
+    assert not any("specs/05_blackboard.yaml" in s for s in out)
+
+
 def test_draft_from_llm_is_recommendation_until_confirmed():
     fake = lambda model, system, messages, max_tokens: (json.dumps(ANSWERS), {"total_tokens": 5})
     d = interview.draft_from_llm("bot tóm tắt meeting", sender=fake)

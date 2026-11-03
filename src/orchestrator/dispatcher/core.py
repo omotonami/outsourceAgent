@@ -32,9 +32,10 @@ class Dispatcher(Scheduler):
                  owns_of: Callable[[dict], list[str]] = default_owns,
                  repo: str | Path | None = None, output_schema: str = "specs/04_schemas/c3_qc.out.json",
                  kill_grace_s: float | None = None, trigger: str = "manual", autonomy=None):
-        registry.check_depth("tạo")
+        project_id = getattr(board, "project_id", None) or "p"
+        registry.check_depth("tạo", project_id)
         self.board = board
-        self.project_id = getattr(board, "project_id", None) or "p"
+        self.project_id = project_id
         self.scope = self.project_id
         self.worker = worker or default_pipeline()
         self.worker_agents = worker_agents()

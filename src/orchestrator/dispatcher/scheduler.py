@@ -21,7 +21,7 @@ Running = dict[cf.Future, tuple[str, list[str], float, WorkerHandle]]
 
 class Scheduler:
     def run(self) -> dict:
-        registry.check_depth("chạy")
+        registry.check_depth("chạy", getattr(self, "scope", None))
         tasks = self._backlog()
         check_dag(tasks)
         # Trạng thái dở từ lần chạy trước (không phải xong/blocked) → làm lại từ đầu.

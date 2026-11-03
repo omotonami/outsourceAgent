@@ -9,8 +9,8 @@ CODE thuần, không LLM quyết thứ tự hay số worker:
   phase build; mọi lần gọi model trong worker rút từ allocation đó. Hết chỗ → ngừng spawn.
 - Substate: ready → in_dev → testing → qc → await_merge. KHÔNG BAO GIỜ ghi `merged`
   (chỉ sau G3 do người ký). Retry ≤ max_build_loops; fail → blocked.
-- Depth tối đa 1 (registry.py): còn worker sống (kể cả thread con do worker mở) thì tạo/chạy
-  Dispatcher → DepthExceeded.
+- Depth tối đa 1, theo dự án (registry.py): worker và thread con của worker không được tạo/chạy
+  Dispatcher nào; dự án còn worker đang chạy không tạo/chạy thêm Dispatcher; dự án khác chạy bình thường.
 - Worker bị KILL (quá ttl) thành zombie: owns của nó vẫn bị giữ với MỌI run() sau cùng dự án cho tới khi
   thread thật sự dừng. Thread worker là daemon → không treo lúc thoát.
 - Worker nhận board proxy (WorkerBoard, src/blackboard/proxy.py): chỉ đọc + ghi đúng zone của agent con.

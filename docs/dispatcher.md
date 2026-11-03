@@ -24,11 +24,16 @@ Không LLM nào chọn thứ tự hay số worker.
 
 ## Worker
 `worker(contract, handle) -> {"ok": bool, "reason"?, "tokens_used"?, "tier"?, "qc_critical"?}`.
-Mặc định `default_pipeline(board)`: c1_dev → c2_tester → c3_qc qua `runtime`/gateway (cần API key). Test dùng mock.
+Mặc định `default_pipeline(user_id, ctx, sender)` (worker dùng `handle.board` = `WorkerBoard`): c1_dev → c2_tester → c3_qc qua `runtime`/gateway (cần API key). Test dùng mock.
 
 ## Git (`src/tools/integrations/repo.py`)
 Truyền `repo=` → mỗi task một worktree `<repo>.worktrees/<id>` trên nhánh `task/<id>`.
-Adapter chỉ cho `init/clone/worktree/branch/status/diff/add/commit/...`; `push` và lệnh remote bị từ chối.
+- Không dep → nhánh tạo từ `HEAD`. Một dep → tạo từ **nhánh task cha** `task/<dep>`.
+- Nhiều dep → nhánh tích hợp tạm `integ/<id>` (từ `task/<dep0>`, merge lần lượt các `task/<depN>`),
+  dùng làm base rồi xoá. Xung đột merge → task `blocked` với lý do `xung đột merge nhánh deps [...]: [file...]`.
+- Task đạt `await_merge` → Dispatcher commit cục bộ thay đổi trong worktree lên `task/<id>` (để task con thấy).
+  Dep-ready vẫn = `await_merge`; không ai tự lên `merged`.
+Adapter chỉ cho `init/clone/worktree/branch/status/diff/add/commit/merge (cục bộ)/...`; `push` và lệnh remote bị từ chối.
 
 ## Dùng
 ```python

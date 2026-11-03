@@ -17,7 +17,7 @@ import subprocess
 from pathlib import Path
 
 _ALLOWED = {"init", "clone", "worktree", "branch", "status", "diff", "rev-parse",
-            "add", "commit", "log", "show-ref", "switch"}
+            "add", "commit", "log", "show-ref", "switch", "merge"}
 _TASK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 # Revision hợp lệ: tên nhánh/tag (có thể có '/'), sha, HEAD, hậu tố ~N / ^N. Không khoảng trắng,
 # không ký tự điều khiển, không ':' '?' '*' '[' '\\', không '..', không bắt đầu bằng '-'.
@@ -32,6 +32,14 @@ _ENV_EXTRA = {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "", "LC_ALL": "C",
 
 class RepoError(Exception):
     pass
+
+
+class MergeConflict(RepoError):
+    """Merge các nhánh dep xung đột. `files`: file xung đột, `branches`: nhánh đã thử gộp."""
+
+    def __init__(self, msg: str, files: list[str], branches: list[str]):
+        super().__init__(msg)
+        self.files, self.branches = files, branches
 
 
 def _env() -> dict:
@@ -187,6 +195,75 @@ def ensure_worktree(repo: Path | str, task_id: str, base: str = "HEAD",
     else:
         _git(["worktree", "add", "-q", "-b", br, "--", _check_path(wt), base], cwd=repo)
     return wt
+
+
+INTEG_PREFIX = "integ/"
+
+
+def integ_branch_name(task_id: str) -> str:
+    _check_task_id(task_id)
+    return f"{INTEG_PREFIX}{task_id}"
+
+
+def has_changes(worktree: Path | str) -> bool:
+    return bool(_git(["status", "--porcelain", "-uall"], cwd=worktree).strip())
+
+
+def base_for_deps(repo: Path | str, task_id: str, deps: list[str],
+                  root: Path | str | None = None, default: str = "HEAD") -> str:
+    """Base để tạo nhánh task/<task_id> (đề án 0002, bổ sung 2026-11-03):
+    - không dep → `default` (HEAD);
+    - 1 dep → nhánh task/<dep> (phải tồn tại);
+    - nhiều dep → nhánh tích hợp tạm integ/<task_id>: tạo từ task/<dep0>, lần lượt merge
+      task/<dep1..n> trong worktree tạm (xoá worktree sau khi xong, giữ nhánh làm base).
+      Xung đột → abort, xoá worktree + nhánh tạm, raise MergeConflict.
+    Nhánh task/<task_id> đã tồn tại thì caller không cần base (ensure_worktree gắn lại nhánh cũ)."""
+    repo = Path(repo).resolve()
+    _check_task_id(task_id)
+    if not deps:
+        return default
+    branches = [branch_name(d) for d in deps]
+    for br in branches:
+        if not branch_exists(repo, br):
+            raise RepoError(f"nhánh dep {br} không tồn tại — không tạo được worktree cho {task_id}")
+    if len(branches) == 1:
+        return branches[0]
+    integ = integ_branch_name(task_id)
+    _git(["worktree", "prune"], cwd=repo)
+    if branch_exists(repo, integ):                     # nhánh tạm từ lần chạy trước → làm lại sạch
+        _git(["branch", "-D", "--", integ], cwd=repo)
+    wt = (_wt_root(repo, root) / f"_integ-{task_id}").resolve()
+    if wt.exists():
+        raise RepoError(f"{wt} tồn tại — không ghi đè")
+    wt.parent.mkdir(parents=True, exist_ok=True)
+    _git(["worktree", "add", "-q", "-b", integ, "--", _check_path(wt), branches[0]], cwd=repo)
+    try:
+        for br in branches[1:]:
+            try:
+                _git(["merge", "-q", "--no-edit", "--no-ff", "-m", f"integ {task_id}: merge {br}",
+                      "--end-of-options", br], cwd=wt)
+            except RepoError as e:
+                files = [f for f in _git(["diff", "--name-only", "--diff-filter=U"], cwd=wt).splitlines()
+                         if f]
+                try:
+                    _git(["merge", "--abort"], cwd=wt)
+                except RepoError:
+                    pass
+                raise MergeConflict(f"xung đột merge deps {branches} cho {task_id} tại {br}: "
+                                    f"{files or str(e)}", files, branches) from e
+    except BaseException:
+        _git(["worktree", "remove", "--force", "--", _check_path(wt)], cwd=repo)
+        _git(["branch", "-D", "--", integ], cwd=repo)
+        raise
+    _git(["worktree", "remove", "--force", "--", _check_path(wt)], cwd=repo)
+    return integ
+
+
+def drop_integ_branch(repo: Path | str, task_id: str) -> None:
+    """Xoá nhánh tích hợp tạm (nếu có) sau khi task/<id> đã được tạo từ nó."""
+    integ = integ_branch_name(task_id)
+    if branch_exists(repo, integ):
+        _git(["branch", "-D", "--", integ], cwd=repo)
 
 
 def list_worktrees(repo: Path | str) -> list[Path]:

@@ -16,6 +16,8 @@ CODE thuần, không LLM quyết thứ tự hay số worker:
 - Worker nhận board proxy (WorkerBoard): chỉ đọc + ghi đúng zone của agent con; không có sign/revoke.
 - Số (max_parallel, ttl, kill_grace, worker_tokens) đọc từ config/budgets.yaml; thiếu → ConfigError.
 - Sự kiện SPAWN / RESULT / BLOCKED / KILL ghi append-only vào zone `trace_log`.
+- Git (khi có `repo`): worktree task con tạo từ nhánh task/<dep>; nhiều dep → nhánh tích hợp tạm
+  integ/<id> (xung đột merge → task blocked). Task xong được commit cục bộ trên task/<id>.
 - H4 Autonomy: trước khi spawn hỏi `autonomy.can_run(agent, task_type, trigger)`. Không được phép →
   task GIỮ `ready` + sự kiện BLOCKED reason="autonomy". `trigger` mặc định "manual" (người gọi run()).
 """
@@ -33,6 +35,7 @@ from jsonschema import validate
 
 from src.blackboard.store import PermissionDenied
 from src.gateway import budget as ledger
+from src.tools.integrations.repo import MergeConflict as _MergeConflict
 
 from . import escalation
 
@@ -285,6 +288,31 @@ class Dispatcher:
         validate(contract, CONTRACT_SCHEMA)
         return contract
 
+    # ---------- Git worktree ----------
+    def _worktree_for(self, task: dict) -> str:
+        """Worktree task/<id>. Task con tạo từ NHÁNH CỦA TASK CHA (task/<dep>); nhiều dep →
+        nhánh tích hợp tạm integ/<id> gộp các nhánh dep (xung đột → MergeConflict → blocked).
+        Nhánh task/<id> đã có (chạy lại) → gắn lại, không đổi base."""
+        from src.tools.integrations import repo as git
+        tid = task["id"]
+        if git.branch_exists(self.repo, git.branch_name(tid)):
+            return str(git.ensure_worktree(self.repo, tid))
+        base = git.base_for_deps(self.repo, tid, list(task.get("deps") or []))
+        try:
+            return str(git.ensure_worktree(self.repo, tid, base=base))
+        finally:
+            git.drop_integ_branch(self.repo, tid)
+
+    def _commit_worktree(self, tid: str) -> None:
+        """Task đạt await_merge: chốt việc trong worktree thành commit cục bộ trên task/<id> để
+        task con (tạo từ nhánh này) thấy được. Không merge, không push."""
+        wt = self.worktrees.get(tid)
+        if not wt:
+            return
+        from src.tools.integrations import repo as git
+        if git.has_changes(wt):
+            git.commit_all(wt, f"task {tid}: await_merge (dispatcher)")
+
     # ---------- Budget (sổ chung của gateway) ----------
     def _allocate(self):
         """Giữ chỗ worker_tokens trên sổ gateway. None nếu không cấu hình worker_tokens.
@@ -410,9 +438,11 @@ class Dispatcher:
                 trigger = "retry-fresh" if self.attempts.get(t["id"]) else "fan-out"
                 try:
                     if self.repo and t["id"] not in self.worktrees:
-                        from src.tools.integrations import repo as git
-                        self.worktrees[t["id"]] = str(git.ensure_worktree(self.repo, t["id"]))
+                        self.worktrees[t["id"]] = self._worktree_for(t)
                     contract = self.build_contract(t, trigger)
+                except _MergeConflict as e:   # nhiều dep, gộp nhánh xung đột → blocked, lý do rõ
+                    self._block(t["id"], f"xung đột merge nhánh deps {e.branches}: {e.files}")
+                    continue
                 except Exception as e:  # contract sai / git lỗi → không spawn
                     self._block(t["id"], f"không spawn được: {e}")
                     continue
@@ -498,6 +528,11 @@ class Dispatcher:
         self._event("RESULT", tid, ok=err is None, reason=err, attempt=self.attempts[tid],
                     tokens_used=used, qc_critical=bool(res.get("qc_critical")))
         if err is None:
+            try:
+                self._commit_worktree(tid)
+            except Exception as e:  # git lỗi → không coi là xong
+                self._block(tid, f"không commit được worktree: {e}")
+                return
             self._set_status(tid, "await_merge", qc_critical=bool(res.get("qc_critical")))
             return
         # Retry: còn vòng → về ready (retry-fresh); hết vòng / Opus vẫn fail → blocked.

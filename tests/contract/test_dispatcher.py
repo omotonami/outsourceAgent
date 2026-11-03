@@ -409,3 +409,66 @@ def test_missing_dispatcher_config_raises(monkeypatch, key):
     monkeypatch.setitem(dsp._BUDGETS, "dispatcher", cfg)
     with pytest.raises(dsp.ConfigError, match=key):
         Dispatcher(_board([_t("A")]), lambda c, h: {"ok": True})
+
+
+# ================= Quyết định 2026-11-03 (a): task con tạo từ nhánh task cha =================
+def _file_worker(files):
+    """Worker mock ghi file vào worktree của task (không commit — Dispatcher commit khi await_merge)."""
+    def wk(contract, h):
+        wt = Path(contract["input_slice"]["worktree"])
+        for name, text in files.get(contract["task_id"], {}).items():
+            (wt / name).write_text(text)
+        return {"ok": True}
+    return wk
+
+
+def test_child_worktree_branches_from_parent_task(tmp_path):
+    r = git.init(tmp_path / "repo")
+    b = _board([_t("T1", owns=["a"]), _t("T2", ["T1"], ["b"])])
+    res = Dispatcher(b, _file_worker({"T1": {"a.txt": "từ T1\n"}}), repo=r).run()
+    assert res["done"] == ["T1", "T2"]
+    wt2 = Path(res["worktrees"]["T2"])
+    assert (wt2 / "a.txt").read_text() == "từ T1\n"               # thấy việc của task cha
+    assert not (r / "a.txt").exists()                              # nhánh chính không bị đụng
+    st = {t["id"]: t["status"] for t in b.get("task_backlog")}
+    assert st == {"T1": "await_merge", "T2": "await_merge"}        # không ai tự lên merged
+
+
+def test_multi_dep_uses_temp_integration_branch(tmp_path):
+    r = git.init(tmp_path / "repo")
+    b = _board([_t("T1", owns=["a"]), _t("T2", owns=["b"]), _t("T3", ["T1", "T2"], ["c"])])
+    res = Dispatcher(b, _file_worker({"T1": {"a.txt": "1\n"}, "T2": {"b.txt": "2\n"}}), repo=r).run()
+    assert sorted(res["done"]) == ["T1", "T2", "T3"] and not res["blocked"]
+    wt3 = Path(res["worktrees"]["T3"])
+    assert (wt3 / "a.txt").read_text() == "1\n" and (wt3 / "b.txt").read_text() == "2\n"
+    assert not git.branch_exists(r, "integ/T3")                    # nhánh tích hợp là tạm
+
+
+def test_multi_dep_merge_conflict_blocks_child(tmp_path):
+    r = git.init(tmp_path / "repo")
+    (r / "x.txt").write_text("gốc\n")
+    git.commit_all(r, "base")
+    b = _board([_t("T1", owns=["a"]), _t("T2", owns=["b"]), _t("T3", ["T1", "T2"], ["c"])])
+    res = Dispatcher(b, _file_worker({"T1": {"x.txt": "T1\n"}, "T2": {"x.txt": "T2\n"}}), repo=r).run()
+    assert sorted(res["done"]) == ["T1", "T2"]
+    assert "xung đột merge" in res["blocked"]["T3"] and "x.txt" in res["blocked"]["T3"]
+    assert not git.branch_exists(r, "integ/T3") and not git.branch_exists(r, "task/T3")
+    ev = [e for e in b.get("trace_log") if e["event"] == "BLOCKED" and e["task_id"] == "T3"]
+    assert ev and "xung đột merge" in ev[0]["reason"]
+
+
+def test_dep_ready_still_requires_await_merge(tmp_path):
+    b = _board([_t("T1", owns=["a"]), _t("T2", ["T1"], ["b"])])
+    seen = []
+    res = Dispatcher(b, lambda c, h: seen.append(c["task_id"]) or {"ok": c["task_id"] != "T1"},
+                     max_parallel=2).run()
+    assert "T2" not in seen and "T1" in res["blocked"] and "T2" in res["blocked"]
+
+
+def test_base_for_deps_unit(tmp_path):
+    r = git.init(tmp_path / "repo")
+    assert git.base_for_deps(r, "X", []) == "HEAD"
+    with pytest.raises(git.RepoError):
+        git.base_for_deps(r, "X", ["NOPE"])
+    git.create_worktree(r, "D1")
+    assert git.base_for_deps(r, "X", ["D1"]) == "task/D1"

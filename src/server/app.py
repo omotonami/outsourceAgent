@@ -15,6 +15,7 @@ from src.agents.a2_estimation import enrich
 from src.iso import impact, conformance, inventory
 from src.orchestrator import status as pstatus
 from src.orchestrator import gate_view
+from src.orchestrator.autonomy import Autonomy
 from src.agents import e1_pm
 
 HERE = Path(__file__).parent
@@ -97,16 +98,53 @@ def _estimate_payload():
         "reflection":{"passed":True,"issues":[]}}
     return enrich(draft, {"domain":"fintech","blended_rate":650,"tech_stack":[]})
 
+# zone → agent-writer (dùng cho ghi demo và để biết output của agent nào được duyệt ở gate)
+ZW = {"lead_brief":"intake","business_context":"a1_bu","estimate":"a2_estimation",
+      "proposal":"a3_proposal","requirements":"b1_ba","design_spec":"b2_ux","ui_system":"b3_ui",
+      "architecture":"b4_tech_lead","task_backlog":"b4_tech_lead",
+      "build_results":"c1_dev","security_report":"d1_soc"}
+# bước demo mà writer zone không nói đúng agent (C2/C3 cùng ghi build_results)
+STEP_AGENT = {"c2": "c2_tester", "c3f": "c3_qc", "c3p": "c3_qc", "c1r": "c1_dev"}
+AGENT_IDS = {p.stem for p in (HERE.parents[1] / "specs/02_agents").glob("*.md")}
+AUTONOMY = None   # Autonomy() lười tạo; test thay bằng instance có state/log ở tmp
+
+
+def _autonomy():
+    global AUTONOMY
+    if AUTONOMY is None:
+        AUTONOMY = Autonomy()
+    return AUTONOMY
+
+
+def _gate_agents(idx):
+    """Agent (có spec) có output được duyệt ở gate tại S.steps[idx]: các bước cùng phase trước gate."""
+    st = S.steps[idx]
+    out = []
+    for s in S.steps[:idx]:
+        if s["phase"] != st["phase"] or s.get("gate"):
+            continue
+        cand = [STEP_AGENT[s["k"]]] if s.get("k") in STEP_AGENT else [ZW.get(z) for z in s.get("writes", [])]
+        for a in cand:
+            if a in AGENT_IDS and a not in out:
+                out.append(a)
+    return out
+
+
+def _record_gate_reviews(idx, gid, reviewer):
+    """H4: người duyệt ký gate KHÔNG sửa → ghi review cho từng agent (autonomy.record_review).
+    CHỈ ghi log — chữ ký đã do người ký qua gate_ui ở trên; autonomy không ký thay."""
+    ax = _autonomy()
+    tt = (ax.cfg.get("gate_task_types") or {}).get(gid, gid.lower())
+    return [ax.record_review(a, tt, gid, reviewer=reviewer, edited=False, approved=True)
+            for a in _gate_agents(idx)]
+
+
 def _do_step():
     if S.i >= len(S.steps): return {"status":"done"}
     st = S.steps[S.i]
     if st.get("gate"):  # H3: kèm decision_records (không transcript) cho G1/G2
         return {"status":"gate", "gate":st, "decision_records":gate_view.decision_records(S.board, st["gate"])}
     # ghi Blackboard thật, đúng agent-writer của từng vùng (nếu sai, Blackboard sẽ chặn)
-    ZW = {"lead_brief":"intake","business_context":"a1_bu","estimate":"a2_estimation",
-          "proposal":"a3_proposal","requirements":"b1_ba","design_spec":"b2_ux","ui_system":"b3_ui",
-          "architecture":"b4_tech_lead","task_backlog":"b4_tech_lead",
-          "build_results":"c1_dev","security_report":"d1_soc"}
     for z in st.get("writes", []):
         wa = ZW.get(z, st.get("k","agent"))
         if z == "estimate": S.board.write("estimate", _estimate_payload(), agent="a2_estimation")
@@ -147,12 +185,17 @@ def state():
 def step(): return {**_do_step(), **state()}
 
 @app.post("/api/gate/{decision}")
-def gate(decision: str):
+def gate(decision: str, edited: bool = False, reviewer: str = "human"):
+    """edited=True: người duyệt đã sửa output (sửa được ghi qua gate_feedback.record_edit) → không
+    tính là duyệt-không-sửa cho autonomy."""
     st = S.steps[S.i]
     if not st.get("gate"): return JSONResponse({"error":"not at gate"}, 400)
     gid = st["gate"]
     if decision == "approve":
-        S.signed[gid] = "approved"; S.board.sign(gid, by="human", via="gate_ui"); S.i += 1
+        S.signed[gid] = "approved"; S.board.sign(gid, by="human", via="gate_ui")
+        if not edited:
+            _record_gate_reviews(S.i, gid, reviewer)
+        S.i += 1
     else:
         S.signed[gid] = "rejected"
         back = next((j for j,s in enumerate(S.steps) if s["phase"]==st["phase"] and not s.get("gate")), 0)

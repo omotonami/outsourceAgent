@@ -30,6 +30,9 @@ Mọi số ở `config/autonomy.yaml` (ngưỡng, số mức hạ, trigger, cặ
 - Dispatcher: `Dispatcher(..., trigger="manual", autonomy=None)`. Trước mỗi spawn hỏi
   `can_run(task.agent or "c1_dev", task.type or "build_task", trigger)`; bị chặn → task giữ `ready`,
   sự kiện `BLOCKED` `reason="autonomy"` (1 lần/run), `summary.autonomy_denied`. Mặc định `manual` = hành vi cũ.
+- Gate UI (`src/server/app.py`): `POST /api/gate/approve` (không `edited`) → sau khi NGƯỜI ký qua `gate_ui`,
+  gọi `record_review(agent, gate_task_types[gate], gate, reviewer, edited=False)` cho mỗi agent có output
+  trong phase của gate. Chỉ ghi log, không ký thay. `edited=true` → không ghi (sửa đi qua `gate_feedback`).
 - Huddle: `huddle_trigger.check(board, phase, autonomy=ax, trigger="routine")` → agent `huddle`,
   task_type = phase. Không truyền `autonomy` = hành vi cũ.
 

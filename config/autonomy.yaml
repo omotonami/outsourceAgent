@@ -39,6 +39,14 @@ demote:
   on_incident: L0       # incident → về thẳng mức này
   risk_severity: Medium # severity ghi risk_register khi hạ
 
+# task_type ghi cho review ở gate (gate_ui/server: người duyệt không sửa → record_review, chỉ log).
+# G3 = build_task để khớp task_type mặc định của Dispatcher.
+gate_task_types:
+  G1: presales
+  G2: discovery
+  G3: build_task
+  G4: security
+
 # Cặp/agent ghim cứng, không bao giờ nâng (spec e1_pm: autonomy cố định).
 pinned:
   e1_pm: L0

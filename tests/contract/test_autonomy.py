@@ -199,3 +199,47 @@ def test_huddle_trigger_respects_autonomy(tmp_path):
     assert huddle_trigger.check(b, "PRESALES") is not None              # không truyền autonomy: như cũ
     assert huddle_trigger.check(b, "PRESALES", autonomy=ax) is None     # L0 + routine → chặn
     assert huddle_trigger.check(b, "PRESALES", autonomy=ax, trigger="manual") is not None
+
+
+# ---------- Quyết định 2026-11-03 (e): gate_ui/server ký gate → record_review (chỉ log) ----------
+def test_server_gate_approve_records_review_without_signing_for_agent(tmp_path, monkeypatch):
+    app = pytest.importorskip("src.server.app")
+    ax = _ax(tmp_path)
+    monkeypatch.setattr(app, "AUTONOMY", ax)
+    app.S.reset(True)
+    g3 = next(i for i, s in enumerate(app.S.steps) if s.get("gate") == "G3")
+    app.S.i = g3
+    app.gate("approve")
+    reviews = [json.loads(l) for l in (tmp_path / "reviews.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert {r["agent"] for r in reviews} == {"c1_dev", "c2_tester", "c3_qc"}
+    assert all(r["gate"] == "G3" and r["task_type"] == "build_task" and r["edited"] is False
+               and r["approved"] is True for r in reviews)
+    sigs = app.S.board._signatures
+    assert list(sigs) == ["G3"] and sigs["G3"]["by"] == "human"   # chữ ký là của người, qua gate_ui
+    assert not (tmp_path / "state.json").exists() or ax.level("c1_dev", "build_task") == "L0"
+
+    # G1: nhiều agent; edited=True → không ghi review
+    app.S.reset(True)
+    app.S.i = next(i for i, s in enumerate(app.S.steps) if s.get("gate") == "G1")
+    n = len(reviews)
+    app.gate("approve", edited=True)
+    assert len((tmp_path / "reviews.jsonl").read_text(encoding="utf-8").splitlines()) == n
+    app.S.reset(True)
+    app.S.i = next(i for i, s in enumerate(app.S.steps) if s.get("gate") == "G1")
+    app.gate("approve", reviewer="lan")
+    new = [json.loads(l) for l in (tmp_path / "reviews.jsonl").read_text(encoding="utf-8").splitlines()][n:]
+    assert {r["agent"] for r in new} == {"a1_bu", "a2_estimation", "a3_proposal"}
+    assert {r["task_type"] for r in new} == {"presales"} and {r["reviewer"] for r in new} == {"lan"}
+    app.S.reset(True)
+
+
+def test_server_gate_reject_records_nothing(tmp_path, monkeypatch):
+    app = pytest.importorskip("src.server.app")
+    ax = _ax(tmp_path)
+    monkeypatch.setattr(app, "AUTONOMY", ax)
+    app.S.reset(True)
+    app.S.i = next(i for i, s in enumerate(app.S.steps) if s.get("gate") == "G3")
+    app.gate("reject")
+    assert not (tmp_path / "reviews.jsonl").exists() and app.S.board._signatures == {}
+    app.S.reset(True)
+

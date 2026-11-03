@@ -8,6 +8,9 @@ Sinh/ghi:
          + bản runtime: src/gateway/routing.yaml · src/blackboard/permissions.yaml
 Mặc định dry_run=True: chỉ trả danh sách việc sẽ làm. Không ghi đè file/entry đã có (raise ScaffoldError).
 YAML được chèn dạng text (giữ comment), sau đó parse lại để chắc không phá file.
+Ghi thật (dry_run=False) CHỈ trên nhánh git `factory/<id>` (output là branch/PR, người duyệt);
+lỗi giữa chừng → rollback mọi file đã ghi.
+zone=None: agent không ghi Blackboard (vd factory_interviewer) → không sinh entry zone.
 """
 import json
 from pathlib import Path
@@ -100,7 +103,7 @@ budget: {_q(s['budget'])}
 prompt_version: "0.1.0"
 phase: {s['phase']}
 risk_level: {s['risk_level']}
-zone: {s['zone']}
+zone: {s['zone'] or 'null'}
 subordinates: {json.dumps(s['subordinates'], ensure_ascii=False)}
 anti_jobs: {json.dumps(s['anti_jobs'], ensure_ascii=False)}
 generated_by: src/factory
@@ -124,7 +127,7 @@ generated_by: src/factory
 | Trigger | {s['trigger']} |
 | Tools | {tools} |
 | Input | ``{insum}`` |
-| Output | ``{outsum}`` → zone `{s['zone']}` |
+| Output | ``{outsum}`` → {f"zone `{s['zone']}`" if s['zone'] else "(không ghi Blackboard)"} |
 | Subordinates | {", ".join(s['subordinates']) or "(không)"} |
 
 ## Agent Card v5 (trường bổ sung)
@@ -182,6 +185,17 @@ Do NOT include explanations outside the JSON.
 
 
 def render_runner(spec):
+    if not spec.get("zone"):
+        return f'''"""{spec['id']}. Spec: specs/02_agents/{spec['id']}.md. Sinh bởi src/factory (H1); autonomy L0.
+Không ghi Blackboard."""
+from src.agents import runtime
+
+ID, ROLE, PHASE = "{spec['id']}", "{spec['role']}", "{spec['phase']}"
+
+
+def run(board, user_id, ctx, inp, **kw):
+    return runtime.run(ID, ROLE, PHASE, board, user_id, ctx, inp, **kw)
+'''
     return f'''"""{spec['id']}. Spec: specs/02_agents/{spec['id']}.md. Sinh bởi src/factory (H1); autonomy L0."""
 from src.agents import runtime
 
@@ -199,6 +213,50 @@ def run(board, user_id, ctx, inp, **kw):
 def render_test(spec):
     sin = json.dumps(_sample(spec["input"]), ensure_ascii=False)
     sout = json.dumps(_sample(spec["output"]), ensure_ascii=False)
+    if not spec.get("zone"):
+        return f'''"""Contract test {spec['id']} (sinh bởi src/factory). Offline: sender mock, không cần API key."""
+import json
+from src.agents import {spec['id']} as agent
+from src.blackboard.store import Blackboard
+
+ID = "{spec['id']}"
+SAMPLE_IN = json.loads({sin!r})
+SAMPLE_OUT = json.loads({sout!r})
+CTX = {{"project_id": "p-{spec['id']}"}}
+
+
+def _fake(text, seen=None):
+    def send(model, system, messages, max_tokens):
+        if seen is not None:
+            seen.append(system)
+        return text, {{"total_tokens": 10}}
+    return send
+
+
+def test_run_offline_returns_data_without_writing_board():
+    b, seen = Blackboard("p"), []
+    res = agent.run(b, None, CTX, SAMPLE_IN, sender=_fake(json.dumps(SAMPLE_OUT), seen))
+    assert res.get("ok"), res
+    assert res["data"] == SAMPLE_OUT
+    assert b._data == {{}}                         # agent không ghi Blackboard
+    assert "{{SKILL_GUIDANCE}}" not in seen[0] and "MODULE 4" in seen[0]
+
+
+def test_invalid_input_rejected():
+    res = agent.run(Blackboard("p"), None, CTX, {{"__not_in_schema__": 1}}, sender=_fake("{{}}"))
+    assert res["error"] == "INVALID_INPUT"
+
+
+def test_bad_output_escalates():
+    res = agent.run(Blackboard("p"), None, CTX, SAMPLE_IN, sender=_fake("not json"))
+    assert res["error"] == "SCHEMA_FAIL" and res["escalate"] is True and res["tier"]
+
+
+def test_extra_output_key_rejected():
+    res = agent.run(Blackboard("p"), None, CTX, SAMPLE_IN,
+                    sender=_fake(json.dumps({{**SAMPLE_OUT, "__extra__": 1}})))
+    assert res["error"] == "SCHEMA_FAIL"
+'''
     return f'''"""Contract test {spec['id']} (sinh bởi src/factory). Offline: sender mock, không cần API key."""
 import json
 import pytest
@@ -361,9 +419,9 @@ def plan(spec, root=ROOT):
             raise ScaffoldError(f"subordinate '{sub}' không có spec")
 
     steps = [{"action": "create", "path": p, "content": c} for p, c in creates.items()]
+    zone_steps = [(r, "zones", spec["zone"], zone_line(spec)) for r in ZONE_FILES] if spec.get("zone") else []
     for rel, block, key, line in (
-            [(r, "agents", aid, routing_line(spec)) for r in ROUTING_FILES]
-            + [(r, "zones", spec["zone"], zone_line(spec)) for r in ZONE_FILES]):
+            [(r, "agents", aid, routing_line(spec)) for r in ROUTING_FILES] + zone_steps):
         f = root / rel
         if not f.exists():
             raise ScaffoldError(f"thiếu {rel}")
@@ -372,20 +430,83 @@ def plan(spec, root=ROOT):
     return steps
 
 
+def factory_branch(agent_id):
+    return f"factory/{agent_id}"
+
+
+def require_factory_branch(root, agent_id):
+    """Ghi thật chỉ trên nhánh factory/<id> (không ghi thẳng nhánh chính)."""
+    from src.tools.integrations import repo as git
+    want = factory_branch(agent_id)
+    try:
+        cur = git.current_branch(root)
+    except git.RepoError as e:
+        raise ScaffoldError(f"{root} không phải git repo — cần nhánh {want}: {e}") from e
+    if cur != want:
+        raise ScaffoldError(f"đang ở nhánh {cur!r}; chỉ ghi trên nhánh {want!r} "
+                            f"(dùng --create-branch hoặc git switch -c {want})")
+
+
+def _write_step(root, s):
+    p = root / s["path"]
+    if s["action"] == "create":
+        with p.open("x", encoding="utf-8") as fh:   # 'x' = không bao giờ đè
+            fh.write(s["content"])
+    else:
+        p.write_text(s["content"], encoding="utf-8")
+
+
+def _rollback(root, journal, new_dirs):
+    errs = []
+    for path, before in reversed(journal):
+        try:
+            if before is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_text(before, encoding="utf-8")
+        except OSError as e:
+            errs.append(f"{path}: {e}")
+    for d in sorted(new_dirs, key=lambda x: len(x.parts), reverse=True):
+        try:
+            d.rmdir()
+        except OSError:
+            pass
+    return errs
+
+
 def scaffold(spec, root=ROOT, dry_run=True):
     """dry_run=True: trả ['create <path>', 'append <path>: <line>'...], không ghi gì.
-    dry_run=False: kiểm tra hết trước rồi mới ghi."""
+    dry_run=False: kiểm tra hết (kể cả nhánh factory/<id>) rồi mới ghi; lỗi giữa chừng → rollback."""
     steps = plan(spec, root)
     summary = [f"{s['action']} {s['path']}" + (f": {s['line']}" if s.get("line") else "") for s in steps]
     if dry_run:
         return summary
     root = Path(root)
-    for s in steps:
-        p = root / s["path"]
-        p.parent.mkdir(parents=True, exist_ok=True)
-        if s["action"] == "create":
-            with p.open("x", encoding="utf-8") as fh:   # 'x' = không bao giờ đè
-                fh.write(s["content"])
-        else:
-            p.write_text(s["content"], encoding="utf-8")
+    require_factory_branch(root, spec["id"])
+    journal, new_dirs = [], []
+    try:
+        for s in steps:
+            p = root / s["path"]
+            missing = [d for d in [p.parent, *p.parent.parents] if not d.exists()]
+            p.parent.mkdir(parents=True, exist_ok=True)
+            new_dirs.extend(missing)
+            if s["action"] == "create":
+                if p.exists():
+                    raise ScaffoldError(f"{s['path']} vừa xuất hiện — không ghi đè")
+                try:
+                    _write_step(root, s)
+                except FileExistsError:
+                    raise                            # file của người khác: không đưa vào journal
+                except BaseException:
+                    if p.exists():
+                        journal.append((p, None))
+                    raise
+                journal.append((p, None))
+            else:
+                journal.append((p, p.read_text(encoding="utf-8")))
+                _write_step(root, s)
+    except Exception as e:
+        errs = _rollback(root, journal, new_dirs)
+        msg = f"ghi dở ở {s['path']}: {e} — đã rollback {len(journal)} file"
+        raise ScaffoldError(msg + (f"; rollback lỗi: {errs}" if errs else "")) from e
     return summary

@@ -151,6 +151,13 @@ def lint_raw(agent_id, root=ROOT):
         elif agent_id not in (cfg.get("agents") or {}):
             add("ROUTING", f"{rel}: thiếu entry agents.{agent_id}")
 
+    # 6b. DRIFT: entry routing của agent ở specs/ và bản runtime src/ phải giống hệt
+    rs, rr = (_load_yaml(root, rel) for rel in ROUTING_FILES)
+    if rs and rr and not rs.get("__yaml_error__") and not rr.get("__yaml_error__"):
+        es, er = (rs.get("agents") or {}).get(agent_id), (rr.get("agents") or {}).get(agent_id)
+        if es is not None and er is not None and es != er:
+            add("DRIFT", f"routing agents.{agent_id} khác nhau: {ROUTING_FILES[0]}={es} ≠ {ROUTING_FILES[1]}={er}")
+
     # 7. Zone: owner_write không được trùng writer là agent khác; zone khai báo phải tồn tại ở cả 2 file
     agents = set(agent_ids(root))
     declared = meta.get("zone")
@@ -171,14 +178,21 @@ def lint_raw(agent_id, root=ROOT):
                 if others:
                     add("ZONE_SHARED", f"{rel}: zone owner_write '{zname}' trùng writer với {others}")
 
+    # 7b. DRIFT: mọi zone có agent là writer phải giống hệt giữa specs/ và src/
+    zs, zr = (_load_yaml(root, rel) for rel in ZONE_FILES)
+    if zs and zr and not zs.get("__yaml_error__") and not zr.get("__yaml_error__"):
+        a, b = zs.get("zones") or {}, zr.get("zones") or {}
+        mine = {n for zones in (a, b) for n, z in zones.items()
+                if agent_id in ((z or {}).get("writers") or [])}
+        for n in sorted(mine):
+            if a.get(n) != b.get(n):
+                add("DRIFT", f"zone '{n}' khác nhau: {ZONE_FILES[0]}={a.get(n)} ≠ {ZONE_FILES[1]}={b.get(n)}")
+
     # 8. Runner + test
     if not (root / f"src/agents/{agent_id}.py").exists():
         add("RUNNER", f"thiếu src/agents/{agent_id}.py")
-    if not (root / f"tests/contract/test_{agent_id}.py").exists():
-        mentioned = any(agent_id in p.read_text(encoding="utf-8", errors="ignore")
-                        for p in (root / "tests").rglob("test_*.py"))
-        if not mentioned:
-            add("TEST", f"thiếu tests/contract/test_{agent_id}.py (và không test nào nhắc tới {agent_id})")
+    if not (root / f"tests/contract/test_{agent_id}.py").is_file():
+        add("TEST", f"thiếu tests/contract/test_{agent_id}.py")
     return errs
 
 

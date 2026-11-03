@@ -82,3 +82,16 @@ def test_clarify_answers_zone_in_specs():
     assert clarify.pending(b) == ["q2"]
     with pytest.raises(PermissionDenied):
         b.write("clarify_answers", [], agent="a1_bu")
+
+
+# Quyết định 2026-11-03 (d): writer `orchestrator` cho trace_log đã duyệt
+def test_trace_log_orchestrator_writer_approved():
+    from src.blackboard import store
+    line = next(l for l in store.ZONES_FILE.read_text(encoding="utf-8").splitlines()
+                if l.strip().startswith("trace_log:"))
+    assert "approved 2026-11-03" in line
+    assert store._PERM["trace_log"] == {"writers": ["gateway", "orchestrator"], "mode": "append_only"}
+    b = Blackboard("p1")
+    b.append("trace_log", {"event": "SPAWN"}, agent="orchestrator")
+    with pytest.raises(PermissionDenied):
+        b.append("trace_log", {"event": "x"}, agent="c1_dev")

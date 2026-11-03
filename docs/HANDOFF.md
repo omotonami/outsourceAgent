@@ -27,7 +27,9 @@ Tài liệu này tóm tắt toàn bộ cuộc làm việc để tiếp tục ở
 
 ---
 
-## 3. Hệ đã xây: `outsourceAgent` (nhánh `feat/v3-bot-team`, 370 test pass, `agent_lint --all` 14/14)
+## 3. Hệ đã xây: `outsourceAgent` (nhánh `feat/v3-bot-team`, 411 test pass, `agent_lint --all` 14/14)
+
+Lịch sử thay đổi theo đợt + quyết định của chủ repo (ngày giờ, commit, số test): [`docs/history/`](history/README.md).
 
 ### Cấu trúc thư mục
 ```
@@ -81,8 +83,9 @@ CLAUDE.md   hiến pháp cho Claude Code
 ```bash
 /opt/homebrew/bin/python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pytest -q                              # 370 test, không cần key
+pytest -q                              # 411 test, không cần key
 python -m src.factory.agent_lint --all # 14/14
+python -m src.tools.checks.history_check --base main   # luật 9 (CLAUDE.md)
 python -m src.demo.dry_run             # mock cả 4 phase
 export ANTHROPIC_API_KEY=sk-ant-...
 python -m src.demo.live_one            # chạy thật A1 BU

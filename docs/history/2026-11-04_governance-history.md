@@ -18,6 +18,10 @@
 Số test sau đợt: **407** (396 + 11 mới: 5 CLI xác nhận tương tác, 6 `history_check`). `agent_lint --all` 14/14.
 `history_check --base b7731d3`: PASS.
 
+## Nhật ký commit của đợt
+1. `docs(history)` — tạo docs/history, commit đề án 0002, link ADR.
+2. `docs(governance)` — CLAUDE.md luật 9–10, ghi chú duyệt card e2_cos, README "10 luật".
+
 ## Việc còn mở
 - Gắn `history_check --base <nhánh đích>` vào CI khi có remote/CI (hiện chưa push).
 - `approved_by` / `reviewer` ở kênh khác (autonomy.promote, gate_ui) đã chặn danh tính máy nhưng vẫn nhận

@@ -3,7 +3,7 @@
 Spec-driven multi-agent framework cho outsourcing delivery (SG).
 
 - `specs/` người viết (nguồn sự thật) · `knowledge/` kinh nghiệm người dùng · `src/` code · `config/ data/ eval/ tests/`.
-- Kiến trúc: `CLAUDE.md` (8 luật), `specs/00_overview.md`, `docs/SPEC.md` (workflow, Blackboard, bot team v3, cấu trúc `src/`).
+- Kiến trúc: `CLAUDE.md` (10 luật), `specs/00_overview.md`, `docs/SPEC.md` (workflow, Blackboard, bot team v3, cấu trúc `src/`).
 - Bàn giao context: `docs/HANDOFF.md`. Quyết định kiến trúc: `docs/adr/`.
 
 ## Chạy

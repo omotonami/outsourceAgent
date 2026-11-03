@@ -28,6 +28,7 @@ generated_by: src/factory
 > File này là lớp `_core`: đặc tả bắt buộc, chỉ admin sửa. Code trong `src/agents/e2_cos.py`
 > đọc file này. Kinh nghiệm thêm của người dùng nằm ở `knowledge/cos/`.
 > Sinh bởi Agent Factory (H1) — phải qua PR + người duyệt trước khi dùng.
+> Card được chủ repo (Daipc) duyệt 2026-11-04 05:27 qua hội thoại; confirmed_by ban đầu do bot điền — xem docs/history/2026-11-04_room-3d-realtime.md
 
 ## Card
 

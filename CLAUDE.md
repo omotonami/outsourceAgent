@@ -15,6 +15,8 @@
 6. Con số (effort, rate) nằm trong `data/`, không hard-code trong code hay skill.
 7. Output agent gắn nhãn FACT / ASSUMPTION / RECOMMENDATION; FACT phải có nguồn.
 8. Mỗi tính năng mới kèm test trong `tests/`. Chạy `pytest -q` trước khi báo xong.
+9. Mọi thay đổi (code, specs, config, docs) phải được ghi vào `docs/history/` (file của đợt + dòng mục lục) trong cùng commit/PR trước khi báo xong. Kiểm: `python -m src.tools.checks.history_check --base <ref>`.
+10. Bot/agent KHÔNG được tự điền danh tính người vào `confirmed_by` / `approved_by` / `reviewer`. Xác nhận người chỉ qua `gate_ui` hoặc terminal tương tác do chính người gõ.
 
 ## Mỗi agent
 - Đặc tả (card + prompt 4 module + I/O schema): `specs/02_agents/<id>.md`

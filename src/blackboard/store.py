@@ -6,6 +6,11 @@ from jsonschema import validate
 
 _HERE = Path(__file__).parent
 _PERM = yaml.safe_load((_HERE / "permissions.yaml").read_text(encoding="utf-8"))["zones"]
+GATE_UI = "gate_ui"
+# Danh tính máy (agent/hệ thống) không bao giờ được ký gate, kể cả khi khai via=gate_ui.
+_AGENT_IDS = {p.stem for p in (_HERE.parents[1] / "specs/02_agents").glob("*.md")}
+_MACHINE_IDS = ({w for z in _PERM.values() for w in z["writers"]} | _AGENT_IDS
+                | {"orchestrator", "gateway", "dispatcher"}) - {GATE_UI}
 
 
 class PermissionDenied(Exception):
@@ -45,9 +50,14 @@ class Blackboard:
         self._check(zone, agent, "append_only")
         self._data.setdefault(zone, []).append({**entry, "source_agent": entry.get("source_agent", agent)})
 
-    # Chữ ký gate: chỉ gate_ui gọi
-    def sign(self, gate, by):
-        self._signatures[gate] = {"by": by, "valid": True}
+    # Chữ ký gate: chỉ gate_ui (hoặc người ký qua gate_ui). Agent/hệ thống/auto-* bị từ chối.
+    def sign(self, gate, by, via=None):
+        who = str(by or "").strip()
+        machine = (who in _MACHINE_IDS or who.split(".", 1)[0] in _MACHINE_IDS
+                   or who.lower().startswith("auto"))
+        if not who or machine or not (who == GATE_UI or via == GATE_UI):
+            raise PermissionDenied(f"chỉ {GATE_UI} được ký gate (by={by!r}, via={via!r})")
+        self._signatures[gate] = {"by": who, "via": GATE_UI, "valid": True}
 
     def revoke_signature(self, gate, reason, by):
         if gate in self._signatures:

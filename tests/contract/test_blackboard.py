@@ -20,7 +20,7 @@ def test_gate_blocks_and_backtrack_revokes():
     o.advance()  # -> AWAIT_G1
     with pytest.raises(TransitionRefused):
         o.advance()  # chưa ký G1
-    b.sign("G1", by="sales_lead")
+    b.sign("G1", by="sales_lead", via="gate_ui")
     o.advance()  # -> DISCOVERY
     o.backtrack("PRESALES", reason="đổi scope", by="pm")
     assert not b.is_signed("G1")
@@ -38,3 +38,22 @@ def test_estimate_schema_accepts_db_driven_shape():
         "assumptions": ["x"], "exclusions": []}
     b.write("estimate", est, agent="a2_estimation")  # không ném là pass
     assert b.get("estimate")["effort_md_total"] == 22.0
+
+
+# ---------- sign(): chỉ gate_ui (review H2 #13) ----------
+@pytest.mark.parametrize("by, via", [
+    ("c1_dev", None), ("c1_dev", "gate_ui"), ("orchestrator", "gate_ui"), ("orchestrator.dispatcher", None),
+    ("auto-L3", "gate_ui"), ("sales_lead", None), ("sales_lead", "worker"), ("", "gate_ui"),
+])
+def test_sign_rejects_non_gate_ui(by, via):
+    b = Blackboard("p")
+    with pytest.raises(PermissionDenied):
+        b.sign("G3", by=by, via=via)
+    assert not b.is_signed("G3")
+
+
+def test_sign_accepts_gate_ui_and_human_via_gate_ui():
+    b = Blackboard("p")
+    b.sign("G1", by="gate_ui")
+    b.sign("G2", by="sales_lead", via="gate_ui")
+    assert b.is_signed("G1") and b.is_signed("G2")

@@ -25,7 +25,7 @@ def test_conformance_gaps_then_ready():
         b.append("risk_register", {"risk":"x","severity":"Low"}, agent="a1_bu")
         b.write("estimate", {"wbs":[{"item":"x","effort_md":1,"source":{"type":"none","refs":[]},"label":"ASSUMPTION"}],
                 "effort_md_total":1,"cost_range":{"low":1,"base":1,"high":1},"assumptions":[]}, agent="a2_estimation")
-        b.sign("G1", by="sales_lead")
+        b.sign("G1", by="sales_lead", via="gate_ui")
         inventory.register("p","ví điện tử",["sonnet"],"PII","SG", base=Path(tmp)/"inv")
         r2 = conformance.check(b, "p", trace_path=tp, inventory_base=Path(tmp)/"inv", impact_present=True)
         assert r2["ready"], r2["gaps"]

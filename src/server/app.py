@@ -148,7 +148,7 @@ def gate(decision: str):
     if not st.get("gate"): return JSONResponse({"error":"not at gate"}, 400)
     gid = st["gate"]
     if decision == "approve":
-        S.signed[gid] = "approved"; S.board.sign(gid, by="human"); S.i += 1
+        S.signed[gid] = "approved"; S.board.sign(gid, by="human", via="gate_ui"); S.i += 1
     else:
         S.signed[gid] = "rejected"
         back = next((j for j,s in enumerate(S.steps) if s["phase"]==st["phase"] and not s.get("gate")), 0)

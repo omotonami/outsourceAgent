@@ -7,21 +7,25 @@ Thread-safe (lock). Mô hình reserve → commit:
 - Allocation (Dispatcher): giữ chỗ `worker_tokens` cho một worker; trong thread worker
   `use_allocation(a)` làm mọi lần gọi gateway rút từ allocation đó (vượt → BudgetExceeded),
   không giữ chỗ thêm trên sổ → không đếm hai lần. `release(a)` trả phần chưa dùng.
+  Allocation nằm trong ContextVar: thread con start trong khối (threading.Thread, kể cả thread của pool được start trong khối) kế thừa
+  qua src/common/threadctx.py → cũng rút từ allocation đó. Allocation đã release → về sổ chung.
 Trần = per_project_tokens[phase] * block_auto_escalate_at_ratio (config/budgets.yaml); null = không trần.
 """
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
-from src.common import config
+from src.common import config, threadctx
 
 _CFG = config.load_yaml(config.BUDGETS)
 _LOCK = threading.RLock()
 _USED: dict[tuple[str, str], int] = defaultdict(int)
 _RESERVED: dict[tuple[str, str], int] = defaultdict(int)
-_TLS = threading.local()
+_ALLOC: contextvars.ContextVar["Reservation | None"] = threadctx.track(
+    contextvars.ContextVar("budget_allocation", default=None))
 
 
 class BudgetExceeded(Exception):
@@ -90,8 +94,8 @@ def reserve(project_id: str, phase: str, tokens: int) -> Reservation:
 
 
 def reserve_call(project_id: str, phase: str, tokens: int) -> Reservation:
-    """Giữ chỗ cho MỘT lần gọi model: rút từ allocation của thread nếu có (cùng dự án/phase)."""
-    alloc = getattr(_TLS, "alloc", None)
+    """Giữ chỗ cho MỘT lần gọi model: rút từ allocation của context hiện tại nếu có (cùng dự án/phase)."""
+    alloc = _ALLOC.get()
     if alloc is None or alloc.closed or alloc.key != (project_id, phase):
         return reserve(project_id, phase, tokens)
     tokens = max(0, int(tokens))
@@ -152,13 +156,13 @@ def release(a: Reservation | None) -> None:
 
 @contextlib.contextmanager
 def use_allocation(a: Reservation | None):
-    """Trong khối này, mọi lần gọi gateway của thread hiện tại rút từ allocation `a`."""
-    prev = getattr(_TLS, "alloc", None)
-    _TLS.alloc = a
+    """Trong khối này, mọi lần gọi gateway của thread hiện tại (và thread con mở trong khối)
+    rút từ allocation `a`."""
+    tok = _ALLOC.set(a)
     try:
         yield a
     finally:
-        _TLS.alloc = prev
+        _ALLOC.reset(tok)
 
 
 def add(project_id: str, phase: str, tokens: int) -> None:

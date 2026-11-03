@@ -95,3 +95,39 @@ def test_allocation_draws_without_double_count(cap):
             _call(pid, "build", 400, _sender(delay=0))
     budget.release(a)
     assert budget.reserved(pid, "build") == 0 and budget.used(pid, "build") == 50
+
+
+# Review cuối #7: thread con mở trong use_allocation rút từ đúng allocation đó
+def test_child_thread_inherits_allocation(cap):
+    cap("build", 100000)
+    pid = "p-budget-child"
+    a = budget.reserve(pid, "build", 300)
+    res = {}
+    with budget.use_allocation(a):
+        def child():
+            try:
+                _call(pid, "build", 100, _sender(delay=0, used=120))
+                res["first"] = "ok"
+                _call(pid, "build", 200, _sender(delay=0, used=10))    # còn 180 < 200 → chặn
+                res["second"] = "ok"
+            except budget.BudgetExceeded:
+                res["second"] = "chặn"
+        t = threading.Thread(target=child)
+        t.start()
+        t.join()
+    assert res == {"first": "ok", "second": "chặn"}
+    assert a.consumed == 120 and a.held == 0
+    assert budget.used(pid, "build") == 120 and budget.reserved(pid, "build") == 180
+    budget.release(a)
+    assert budget.reserved(pid, "build") == 0
+
+
+def test_thread_outside_allocation_uses_ledger(cap):
+    cap("build", 100000)
+    pid = "p-budget-noalloc"
+    a = budget.reserve(pid, "build", 300)
+    t = threading.Thread(target=lambda: _call(pid, "build", 500, _sender(delay=0, used=500)))
+    t.start()                                   # không trong use_allocation → sổ chung, không đụng a
+    t.join()
+    assert a.consumed == 0 and budget.used(pid, "build") == 500
+    budget.release(a)

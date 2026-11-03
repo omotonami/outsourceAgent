@@ -1,0 +1,44 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m src.ops.project new:*)",
+      "Bash(python -m src.ops.project run:*)",
+      "Bash(python -m src.ops.project huddle:*)",
+      "Bash(python -m src.ops.project list:*)",
+      "Bash(python -m src.ops.project status:*)",
+      "Bash(python -m src.ops.report:*)",
+      "Bash(python -m src.ops.doctor:*)",
+      "Bash(python -m src.ops.prune --dry-run:*)",
+      "Bash(python -m src.ops.prune --days:*)",
+      "Bash(python -m src.ops.prune)",
+      "Bash(python -m pytest:*)",
+      "Bash(pytest:*)",
+      "Bash(python -m src.factory.agent_lint:*)",
+      "Bash(python -m src.tools.checks.history_check:*)",
+      "Bash(uvicorn src.server.app:app:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ],
+    "ask": [
+      "Bash(python -m src.ops.prune --closed-project:*)",
+      "Bash(python -m src.factory.new:*)",
+      "Bash(git commit:*)",
+      "Edit(specs/**)",
+      "Write(specs/**)",
+      "Edit(config/**)",
+      "Write(config/**)",
+      "Edit(CLAUDE.md)",
+      "Write(CLAUDE.md)"
+    ],
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(rm -rf:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh repo:*)",
+      "Bash(git remote add:*)",
+      "Read(.env)",
+      "Read(.env.*)"
+    ]
+  }
+}

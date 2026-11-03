@@ -6,11 +6,14 @@ Spec-driven multi-agent framework cho outsourcing delivery (SG).
 - Kiến trúc: `CLAUDE.md` (10 luật), `specs/00_overview.md`, `docs/SPEC.md` (workflow, Blackboard, bot team v3, cấu trúc `src/`).
 - Bàn giao context: `docs/HANDOFF.md`. Quyết định kiến trúc: `docs/adr/`. Lịch sử thay đổi + quyết định của chủ repo: [`docs/history/`](docs/history/README.md).
 
+## Vận hành hằng ngày (account công ty)
+Xem [`START_HERE.md`](START_HERE.md) · CLI `python -m src.ops.project|report|prune|doctor` · skills `.claude/skills/` · runbook `docs/ops/runbook-daily.md`.
+
 ## Chạy
 ```bash
 python -m venv .venv && source .venv/bin/activate      # Python ≥ 3.10
 pip install -r requirements.txt
-pytest -q                                   # 411 test offline (mock), không cần API key
+pytest -q                                   # 432 test offline (mock), không cần API key
 python -m src.factory.agent_lint --all      # 14/14 agent đạt chuẩn Card v5 / schema / routing / zone
 python -m src.tools.checks.history_check --base main   # luật 9: đổi src/ specs/ config/ phải có docs/history/ (CI)
 python -m src.demo.dry_run                  # cả 4 phase với LLM mock

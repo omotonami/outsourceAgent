@@ -5,6 +5,7 @@ Ghi xuyên (write-through) vào event store dùng chung (src/blackboard/eventsto
 Store chỉ nhận lượt ghi SAU khi đã kiểm quyền + schema (ghi bị từ chối không vào store); store lỗi →
 lượt ghi lỗi, board trong RAM không đổi. Không cấu hình → hành vi cũ (chỉ RAM).
 `Blackboard.load(pid, store)` dựng lại trạng thái từ log — bản xem cho server (không ghi xuyên).
+`Blackboard.resume(pid, store)` dựng lại rồi ghi xuyên tiếp (CLI vận hành src/ops/, chạy qua nhiều process).
 """
 import copy
 import threading
@@ -61,6 +62,16 @@ class Blackboard:
         b = cls(project_id, store=None)
         for row in store.read(project_id, upto=upto):
             b._replay(row)
+        return b
+
+    @classmethod
+    def resume(cls, project_id: str, store) -> "Blackboard":
+        """Dựng lại board từ log RỒI bật ghi xuyên vào chính store đó — để chạy tiếp dự án qua nhiều
+        process/ngày (src/ops/project.py). Lượt ghi mới vẫn qua kiểm quyền + schema như thường."""
+        b = cls.load(project_id, store)
+        b._store = store
+        from src.blackboard import eventstore
+        eventstore.register(project_id, store)
         return b
 
     def _replay(self, row) -> None:

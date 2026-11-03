@@ -2,6 +2,8 @@
 
 Tài liệu này tóm tắt toàn bộ cuộc làm việc để tiếp tục ở account/phiên khác. Dán file này (hoặc nội dung) vào phiên mới, kèm repo.
 
+> Cập nhật 2026-11-04: thêm bộ vận hành công ty (`src/ops/`, `.claude/`, `START_HERE.md`, `docs/ops/`) — 432 test; xem `docs/history/2026-11-04_company-ops-kit.md`.
+>
 > Cập nhật 2026-11-03: đã xong bot team v3 (H1–H5, đề án 0002 — tóm tắt ở `docs/adr/0002-bot-team-v3.md`) và refactor toàn repo (nhánh `feat/v3-bot-team`). Mục 3 và 5 phản ánh trạng thái này.
 
 ---
@@ -27,7 +29,7 @@ Tài liệu này tóm tắt toàn bộ cuộc làm việc để tiếp tục ở
 
 ---
 
-## 3. Hệ đã xây: `outsourceAgent` (nhánh `feat/v3-bot-team`, 411 test pass, `agent_lint --all` 14/14)
+## 3. Hệ đã xây: `outsourceAgent` (nhánh `feat/v3-bot-team`, 432 test pass, `agent_lint --all` 14/14)
 
 Lịch sử thay đổi theo đợt + quyết định của chủ repo (ngày giờ, commit, số test): [`docs/history/`](history/README.md).
 
@@ -83,7 +85,7 @@ CLAUDE.md   hiến pháp cho Claude Code
 ```bash
 /opt/homebrew/bin/python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pytest -q                              # 411 test, không cần key
+pytest -q                              # 432 test, không cần key
 python -m src.factory.agent_lint --all # 14/14
 python -m src.tools.checks.history_check --base main   # luật 9 (CLAUDE.md)
 python -m src.demo.dry_run             # mock cả 4 phase

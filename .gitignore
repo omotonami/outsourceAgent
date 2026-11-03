@@ -20,3 +20,6 @@ knowledge/*/learned/PROPOSED.md
 
 # Event store Phòng 3D realtime (SQLite, src/blackboard/eventstore.py)
 data/runtime/
+
+# Báo cáo vận hành (src/ops/report.py) — có thể chứa dữ liệu công ty, KHÔNG commit
+docs/reports/

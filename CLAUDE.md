@@ -22,3 +22,9 @@
 - Đặc tả (card + prompt 4 module + I/O schema): `specs/02_agents/<id>.md`
 - Code runner (1 file): `src/agents/<id>.py`
 - Schema I/O: `specs/04_schemas/<id>.in.json` / `.out.json`
+
+## Vận hành hằng ngày (Chief)
+- Bắt đầu: `START_HERE.md`. Lịch một ngày + xử lý sự cố: `docs/ops/runbook-daily.md`.
+- Skills: `.claude/skills/` — `chief-daily` (tổng), `flow-new-project`, `flow-daily-report`, `flow-room`, `flow-new-bot`.
+- CLI: `python -m src.ops.project|report|prune|doctor`. Không có lệnh ký gate; gate chỉ người ký qua `gate_ui`.
+- Dữ liệu công ty ở lại account công ty; ra ngoài chỉ bản `report daily --redact`.

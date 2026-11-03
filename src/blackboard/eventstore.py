@@ -4,7 +4,7 @@ Một bảng `events(seq, project_id, ts, kind, zone, agent, payload_json)`; `se
 toàn cục (nhiều process ghi đồng thời: BEGIN IMMEDIATE + busy_timeout → không mất, không trùng seq).
 - Ghi: CHỈ qua Blackboard (write-through, SAU khi đã kiểm quyền + schema) — module này không biết quyền.
 - Đọc: server dashboard mở `readonly=True` (URI mode=ro): không tạo file, không ghi.
-- KHÔNG UPDATE. DELETE chỉ ở `prune()` — retention có chủ đích, gọi tay (specs/05_blackboard.yaml →
+- KHÔNG UPDATE. DELETE chỉ ở `prune()` / `prune_superseded()` — retention có chủ đích, gọi tay (specs/05_blackboard.yaml →
   retention.drafts_days); không endpoint nào gọi.
 - Payload qua `scrub()`: bỏ khoá raw thinking / prompt / transcript / contract (không bao giờ vào store).
 Cấu hình: config/runtime.yaml → eventstore (path, write_through, busy_timeout_ms, poll_ms, heartbeat_s,
@@ -190,6 +190,28 @@ class EventStore:
             args.append(project_id)
         with self._conn() as c:
             return c.execute(q, args).rowcount
+
+
+    def prune_superseded(self, before_ts: float) -> int:
+        """Retention bản nháp (src/ops/prune.py): xoá dòng zone_write có ts < before_ts mà ĐÃ có
+        zone_write mới hơn cùng (project, zone). Bản mới nhất của mỗi zone giữ lại → Blackboard.load /
+        resume vẫn dựng đúng trạng thái hiện tại. Trả số dòng xoá."""
+        if self.readonly:
+            raise PermissionError("EventStore readonly: không xoá")
+        q = ("DELETE FROM events WHERE kind='zone_write' AND ts<? AND EXISTS (SELECT 1 FROM events n "
+             "WHERE n.project_id=events.project_id AND n.zone=events.zone AND n.kind='zone_write' "
+             "AND n.seq>events.seq)")
+        with self._conn() as c:
+            return c.execute(q, (float(before_ts),)).rowcount
+
+    def vacuum(self) -> None:
+        """Sau khi xoá: checkpoint WAL + VACUUM để dữ liệu đã xoá không còn trong file (PDPA)."""
+        if self.readonly:
+            raise PermissionError("EventStore readonly: không vacuum")
+        with self._conn() as c:
+            c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            c.execute("VACUUM")
+            c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
 
 def retention_cutoff(now: float | None = None, root=None) -> float:

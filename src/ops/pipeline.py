@@ -1,0 +1,212 @@
+"""Chạy dự án từ state hiện tại tới điểm cần NGƯỜI (gate / ESCALATED / BLOCKED). Code thuần.
+
+- State dựng lại từ event store (Blackboard.resume + project_status.state) → chạy tiếp qua nhiều
+  process / nhiều ngày. Mỗi bước idempotent: zone đã có thì không gọi lại agent đó.
+- Agent gọi qua runner trong src/agents/ (→ gateway). BUILD dùng Dispatcher. Huddle KHÔNG chạy ở đây
+  (chỉ khi người gọi `project huddle`, quyết định chủ repo).
+- Gate: chỉ ĐỌC chữ ký (board.is_signed). Module này không có đường ký gate (luật 10, specs/06_gates.md).
+- Escalate: agent fail schema (escalate=True) hoặc vượt budget → Orchestrator.escalate → ESCALATED.
+- BLOCKED: guard từ chối / Dispatcher còn task blocked / lỗi môi trường → dừng, ghi sự kiện BLOCKED vào
+  trace_log (writer orchestrator), state giữ nguyên để chạy lại sau khi người xử lý.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from src.gateway import budget as ledger
+from src.orchestrator import events
+from src.orchestrator import status as pstatus
+from src.orchestrator.dispatcher import Dispatcher, default_pipeline
+from src.orchestrator.state_machine import Orchestrator, TransitionRefused
+
+from . import common
+
+USER = "chief-ops"          # user_id cho skill_loader (không phải danh tính người)
+WRITER = "orchestrator"
+BY = "orchestrator.ops"
+
+
+class Escalate(Exception):
+    pass
+
+
+class Blocked(Exception):
+    pass
+
+
+@dataclass
+class Outcome:
+    project_id: str
+    state: str
+    stop: str                      # AWAIT_GATE | ESCALATED | BLOCKED | RELEASED
+    gate: str | None = None
+    reason: str | None = None
+    ran: list[str] = field(default_factory=list)
+
+    def human_todo(self) -> list[str]:
+        if self.stop == "AWAIT_GATE":
+            return [f"Người ({common.GATE_SIGNER[self.gate]}) xem và ký {self.gate} trên dashboard gate_ui "
+                    f"({common.DASHBOARD}). CLI/bot KHÔNG ký thay.",
+                    common.GATE_UI_GAP,
+                    f"Ký xong: chạy lại `python -m src.ops.project run --id {self.project_id}`."]
+        if self.stop == "ESCALATED":
+            return [f"Dự án ESCALATED: {self.reason}. Người xem risk_register (report daily) và quyết "
+                    "hướng xử lý. CLI không tự gỡ ESCALATED."]
+        if self.stop == "BLOCKED":
+            return [f"BLOCKED: {self.reason}. Người xử lý nguyên nhân rồi chạy lại `run`."]
+        return ["RELEASED — không còn bước tự động."]
+
+
+def _check(res: dict, agent: str) -> dict:
+    if res.get("ok"):
+        return res
+    msg = f"{agent}: {res.get('error')} — {res.get('reason')}"
+    if res.get("escalate"):
+        raise Escalate(msg)
+    raise Blocked(msg)
+
+
+class Runner:
+    def __init__(self, store, pid: str, sender=None):
+        self.store, self.pid, self.sender = store, pid, sender
+        self.board = common.resume(store, pid)
+        common.seed_ledger(store, pid)
+        self.orch = Orchestrator(self.board, common.state_of(self.board))
+        self.ran: list[str] = []
+
+    # ---------- tiện ích ----------
+    def _kw(self) -> dict:
+        return {"sender": self.sender} if self.sender else {}
+
+    def _ctx(self, **extra) -> dict:
+        return {"project_id": self.pid, **extra}
+
+    def _status(self) -> None:
+        pstatus.update(self.board, self.orch.state, budget_ratio=common.budget_ratio(self.store, self.pid))
+
+    def _advance(self) -> None:
+        try:
+            self.orch.advance()
+        except TransitionRefused as e:
+            raise Blocked(f"guard từ chối ở {self.orch.state}: {e}") from e
+        self._status()
+
+    def _agent(self, zone: str, agent: str, fn) -> None:
+        if self.board.get(zone) is not None:
+            return
+        _check(fn(), agent)
+        self.ran.append(agent)
+
+    # ---------- phase ----------
+    def presales(self) -> None:
+        from src.agents import a1_bu, a2_estimation, a3_proposal
+        b, kw = self.board, self._kw()
+        self._agent("business_context", "a1_bu", lambda: a1_bu.run(
+            b, USER, self._ctx(), {"project_id": self.pid, "lead_brief": b.get("lead_brief")}, **kw))
+        bc = b.get("business_context")
+        mods = [{"name": m["name"], **({"desc": m["desc"]} if m.get("desc") else {})} for m in bc.get("modules", [])]
+        rc = common.rate_card()
+        ctx = self._ctx(domain=bc.get("domain", "default"), blended_rate=rc.get("blended_rate", 0),
+                        tech_stack=bc.get("tech_hints", []))
+        self._agent("estimate", "a2_estimation", lambda: a2_estimation.run(
+            b, USER, ctx, {"project_id": self.pid, "business_context": bc, "modules": mods}, **kw))
+        self._agent("proposal", "a3_proposal", lambda: a3_proposal.run(
+            b, USER, self._ctx(), {"business_context": bc, "estimate": b.get("estimate")}, **kw))
+
+    def discovery(self) -> None:
+        from src.agents import b1_ba, b2_ux, b3_ui, b4_tech_lead
+        b, kw = self.board, self._kw()
+        self._agent("requirements", "b1_ba", lambda: b1_ba.run(
+            b, USER, self._ctx(), {"signed_proposal": b.get("proposal"),
+                                   "business_context": b.get("business_context")}, **kw))
+        stories = b.get("requirements")["stories"]
+        self._agent("design_spec", "b2_ux", lambda: b2_ux.run(b, USER, self._ctx(), {"stories": stories}, **kw))
+        self._agent("ui_system", "b3_ui", lambda: b3_ui.run(
+            b, USER, self._ctx(), {"design_spec": b.get("design_spec"), "stories": stories}, **kw))
+        if b.get("task_backlog") is None:
+            res = _check(b4_tech_lead.run(b, USER, self._ctx(), {
+                "stories": stories, "screens": (b.get("design_spec") or {}).get("screens", [])}, **kw),
+                "b4_tech_lead")
+            # runner b4 không tự ghi: Orchestrator ghi hộ ĐÚNG danh tính writer zone (như dry_run)
+            b.write("architecture", {"architecture": res["data"]["architecture"],
+                                     "adr": res["data"].get("adr", [])}, agent="b4_tech_lead")
+            b.write("task_backlog", res["data"]["task_backlog"], agent="b4_tech_lead")
+            self.ran.append("b4_tech_lead")
+
+    def build(self) -> None:
+        worker = default_pipeline(user_id=USER, sender=self.sender)
+        res = Dispatcher(self.board, worker=worker).run()
+        self.ran.append("dispatcher")
+        if res.get("escalation") and "budget" in str(res["escalation"]):
+            raise Escalate(f"Dispatcher: {res['escalation']}")
+        if res.get("blocked"):
+            raise Blocked(f"task blocked: {sorted(res['blocked'])}")
+        if res.get("escalation"):
+            raise Blocked(f"Dispatcher: {res['escalation']}")
+
+    def security(self) -> None:
+        from src.agents import d1_soc
+        from src.tools.security import dependency_scan, sast, secret_scan
+        b = self.board
+        if b.get("security_report") is not None:
+            return
+        raw, missing = [], []
+        for name, tool in (("sast", sast), ("dependency_scan", dependency_scan), ("secret_scan", secret_scan)):
+            try:
+                raw += tool.run(".")
+            except NotImplementedError:
+                missing.append(name)
+        if missing:   # không giả vờ đã quét: người thấy ở report + trước G4
+            b.append("risk_register", {"risk": f"Scanner bảo mật còn stub, CHƯA quét thật: {missing}",
+                                       "severity": "High", "status": "open", "phase": "security"}, agent=WRITER)
+        self._agent("security_report", "d1_soc", lambda: d1_soc.run(
+            b, USER, self._ctx(), {"raw_findings": raw}, **self._kw()))
+
+    PHASES = {"PRESALES": "presales", "DISCOVERY": "discovery", "BUILD": "build", "SECURITY": "security"}
+
+    # ---------- vòng chạy ----------
+    def run(self) -> Outcome:
+        try:
+            while True:
+                s = self.orch.state
+                if s == "RELEASED":
+                    return self._out("RELEASED")
+                if s == "ESCALATED":
+                    return self._out("ESCALATED", reason=self._last_escalation())
+                gate = common.pending_gate(s)
+                if gate:
+                    if not self.board.is_signed(gate):
+                        return self._out("AWAIT_GATE", gate=gate)
+                    self._advance()
+                    continue
+                if s == "INTAKE":
+                    if self.board.get("project_status") is None:
+                        self._status()
+                    self._advance()
+                    continue
+                getattr(self, self.PHASES[s])()
+                self._advance()
+        except (Escalate, ledger.BudgetExceeded) as e:
+            reason = str(e) if isinstance(e, Escalate) else f"vượt budget: {e}"
+            self.orch.escalate(reason)
+            self._status()
+            return self._out("ESCALATED", reason=reason)
+        except Blocked as e:
+            return self._blocked(str(e))
+        except Exception as e:  # noqa: BLE001 — lỗi môi trường (thiếu key, mạng...): dừng, không đổi state
+            return self._blocked(f"lỗi khi chạy: {type(e).__name__}: {e}")
+
+    def _blocked(self, reason: str) -> Outcome:
+        events.emit(self.board, "BLOCKED", writer=WRITER, by=BY, reason=reason, state=self.orch.state)
+        return self._out("BLOCKED", reason=reason)
+
+    def _last_escalation(self) -> str | None:
+        rr = [r for r in self.board.get("risk_register") or [] if r.get("source_agent") == "orchestrator"]
+        return rr[-1]["risk"] if rr else None
+
+    def _out(self, stop: str, gate: str | None = None, reason: str | None = None) -> Outcome:
+        return Outcome(self.pid, self.orch.state, stop, gate=gate, reason=reason, ran=list(self.ran))
+
+
+def run(store, pid: str, sender=None) -> Outcome:
+    return Runner(store, pid, sender).run()

@@ -16,6 +16,7 @@ from pathlib import Path
 from jsonschema import validate
 
 from src.agents import clarify, runtime
+from src.blackboard.proxy import ReadOnlyBoard
 from src.blackboard.store import PermissionDenied, _schema as _zone_schema
 from src.governance import confirm as human
 from src.orchestrator import team_feed
@@ -27,34 +28,12 @@ TRACE_LIMIT = 20                       # số event Team feed đưa vào input (
 FORBIDDEN_ASSIGNEES = {"gate_ui", ID, "cos"}
 
 
-class CosBoard:
-    """Board proxy cho cos: CHỈ đọc. Không write/append/sign/revoke_signature."""
-    __slots__ = ("_CosBoard__b", "project_id")
+class CosBoard(ReadOnlyBoard):
+    """Board proxy cho cos: CHỈ đọc (src/blackboard/proxy.py)."""
+    __slots__ = ()
 
     def __init__(self, board):
-        self.__b = board
-        self.project_id = getattr(board, "project_id", None)
-
-    def get(self, zone):
-        return self.__b.get(zone)
-
-    def is_signed(self, gate):
-        return self.__b.is_signed(gate)
-
-    def _deny(self, what, *a, **kw):
-        raise PermissionDenied(f"{ID} chỉ đọc: không được {what} (gate chỉ qua gate_ui do người ký)")
-
-    def write(self, zone, value, agent=ID):
-        self._deny(f"ghi {zone}")
-
-    def append(self, zone, entry, agent=ID):
-        self._deny(f"append {zone}")
-
-    def sign(self, gate, by=ID, via=None):
-        self._deny(f"ký gate {gate}")
-
-    def revoke_signature(self, gate, reason=None, by=ID):
-        self._deny(f"thu hồi gate {gate}")
+        super().__init__(board, owner=ID)
 
 
 def run(board, user_id, ctx, inp, **kw):

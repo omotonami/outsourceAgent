@@ -35,7 +35,7 @@ from typing import Callable
 import yaml
 from jsonschema import validate
 
-from src.blackboard.store import PermissionDenied
+from src.blackboard.proxy import WorkerBoard
 from src.gateway import budget as ledger
 from src.tools.integrations.repo import MergeConflict as _MergeConflict
 
@@ -203,34 +203,6 @@ def worker_agents() -> list[str]:
     if not subs:
         raise ConfigError("specs/02_agents/b4_tech_lead.md: thiếu 'subordinates'")
     return list(subs)
-
-
-class WorkerBoard:
-    """Board proxy cho worker: đọc được; ghi/append chỉ với danh tính agent con (specs/05_blackboard.yaml
-    vẫn quyết zone). KHÔNG có sign / revoke_signature / ghi task_backlog / trace_log."""
-    __slots__ = ("_WorkerBoard__b", "_WorkerBoard__agents", "project_id")
-
-    def __init__(self, board, agents):
-        self.__b, self.__agents = board, frozenset(agents)
-        self.project_id = getattr(board, "project_id", None)
-
-    def get(self, zone):
-        return self.__b.get(zone)
-
-    def is_signed(self, gate):
-        return self.__b.is_signed(gate)
-
-    def _who(self, agent):
-        if agent not in self.__agents:
-            raise PermissionDenied(f"worker chỉ ghi với danh tính {sorted(self.__agents)}, không phải {agent!r}")
-
-    def write(self, zone, value, agent):
-        self._who(agent)
-        return self.__b.write(zone, value, agent=agent)
-
-    def append(self, zone, entry, agent):
-        self._who(agent)
-        return self.__b.append(zone, entry, agent=agent)
 
 
 class WorkerHandle:

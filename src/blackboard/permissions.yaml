@@ -15,5 +15,5 @@ zones:
   project_status: {writers: ["orchestrator"], mode: owner_write}
   risk_register: {writers: ["*"], mode: append_only}  # Append-only, có source_agent; chỉ PM đổi status
   revision_log: {writers: ["*"], mode: append_only}
-  trace_log: {writers: ["gateway"], mode: append_only}  # Append-only
+  trace_log: {writers: ["gateway", "orchestrator"], mode: append_only}  # Append-only. orchestrator: Dispatcher (H2) ghi SPAWN/RESULT/BLOCKED/KILL cho Team feed
   clarify_answers: {writers: ["clarify"], mode: owner_write}

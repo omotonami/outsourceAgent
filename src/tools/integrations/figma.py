@@ -1,6 +1,9 @@
 """Adapter Figma (H5) — CHỈ ĐỌC qua Figma REST. Code thuần, không LLM.
 
 - Token: env FIGMA_TOKEN (personal access token, scope chỉ đọc `file_content:read`). Không log token.
+  Redirect sang nơi khác `https://api.figma.com` → bỏ header X-Figma-Token (_TokenSafeRedirect).
+- tokens_css: fontFamily qua whitelist ký tự (chữ/số/khoảng trắng/- _ . '), số (size/weight/line-height)
+  phải là số — chặn chèn CSS từ nội dung file Figma (dữ liệu không tin cậy).
 - HTTP qua urllib; `transport(method, url, headers, timeout) -> (status, bytes)` inject được để test offline.
 - Client từ chối mọi method khác GET (không có hàm ghi: comment/variables POST... không tồn tại ở đây).
 - export_tokens(): style trong file → design tokens dạng ui_system của b3_ui: {tokens, tokens_css}.
@@ -15,18 +18,40 @@ import urllib.parse
 import urllib.request
 
 API = "https://api.figma.com/v1"
+API_HOST = "api.figma.com"
+TOKEN_HEADER = "X-Figma-Token"
 TIMEOUT_S = 30
+FONT_FAMILY_MAX = 100
 _KEY_RE = re.compile(r"^[A-Za-z0-9]+$")
+_FONT_UNSAFE = re.compile(r"[^\w '.-]", re.UNICODE)     # ngoài whitelist → bỏ (gồm " ; { } < > \\ xuống dòng)
 
 
 class FigmaError(Exception):
     pass
 
 
+class _TokenSafeRedirect(urllib.request.HTTPRedirectHandler):
+    """Theo redirect như urllib, nhưng KHÔNG mang token sang nơi khác https://api.figma.com."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is None:
+            return None
+        u = urllib.parse.urlsplit(newurl)
+        if not (u.scheme == "https" and (u.hostname or "").lower() == API_HOST and u.port in (None, 443)):
+            for store in (new.headers, new.unredirected_hdrs):
+                for k in [k for k in store if k.lower() == TOKEN_HEADER.lower()]:
+                    del store[k]
+        return new
+
+
+_OPENER = urllib.request.build_opener(_TokenSafeRedirect)
+
+
 def urllib_transport(method, url, headers, timeout=TIMEOUT_S):
     req = urllib.request.Request(url, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:   # noqa: S310 (URL cố định https API)
+        with _OPENER.open(req, timeout=timeout) as r:   # noqa: S310 (URL cố định https API)
             return r.status, r.read()
     except urllib.error.HTTPError as e:
         return e.code, e.read()
@@ -82,6 +107,16 @@ class FigmaClient:
 
 
 # ---------- export design tokens → ui_system (b3_ui) ----------
+def _font_family(v):
+    """Tên font an toàn để đặt trong chuỗi CSS: chỉ giữ ký tự whitelist; rỗng → None."""
+    s = _FONT_UNSAFE.sub("", str(v or "")).strip()[:FONT_FAMILY_MAX].strip()
+    return s or None
+
+
+def _is_num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
 def _slug(name):
     s = re.sub(r"[^a-z0-9]+", "-", str(name).lower()).strip("-")
     return s or "token"
@@ -122,13 +157,19 @@ def export_tokens(file_json, style_nodes=None):
                     tokens["color"][name] = _hex(solid.get("color") or {}, solid.get("opacity", 1))
             elif kind == "text" and st.get("styleType") == "TEXT" and name not in tokens["typography"]:
                 s = n.get("style") or {}
-                tokens["typography"][name] = {k: s[k] for k in
-                                              ("fontFamily", "fontWeight", "fontSize", "lineHeightPx",
-                                               "letterSpacing") if k in s}
+                typo = {k: s[k] for k in ("fontFamily", "fontWeight", "fontSize", "lineHeightPx",
+                                          "letterSpacing") if k in s}
+                if "fontFamily" in typo:
+                    fam = _font_family(typo["fontFamily"])
+                    if fam is None:
+                        del typo["fontFamily"]
+                    else:
+                        typo["fontFamily"] = fam
+                tokens["typography"][name] = typo
             elif kind == "effect" and st.get("styleType") == "EFFECT" and name not in tokens["effect"]:
                 e = next((x for x in n.get("effects") or [] if x.get("type") == "DROP_SHADOW"), None)
-                if e:
-                    o = e.get("offset") or {}
+                o = (e or {}).get("offset") or {}
+                if e and all(_is_num(x) for x in (o.get("x", 0), o.get("y", 0), e.get("radius", 0))):
                     tokens["effect"][name] = (f"{o.get('x', 0)}px {o.get('y', 0)}px {e.get('radius', 0)}px "
                                               f"{_hex(e.get('color') or {})}")
     return {"tokens": tokens, "tokens_css": tokens_css(tokens), "source": "figma"}
@@ -139,13 +180,13 @@ def tokens_css(tokens):
     for k, v in sorted(tokens.get("color", {}).items()):
         lines.append(f"  --color-{k}: {v};")
     for k, t in sorted(tokens.get("typography", {}).items()):
-        if "fontFamily" in t:
-            lines.append(f"  --font-{k}-family: \"{t['fontFamily']}\";")
-        if "fontSize" in t:
+        if (fam := _font_family(t.get("fontFamily"))):
+            lines.append(f"  --font-{k}-family: \"{fam}\";")
+        if _is_num(t.get("fontSize")):
             lines.append(f"  --font-{k}-size: {t['fontSize']}px;")
-        if "fontWeight" in t:
+        if _is_num(t.get("fontWeight")):
             lines.append(f"  --font-{k}-weight: {t['fontWeight']};")
-        if "lineHeightPx" in t:
+        if _is_num(t.get("lineHeightPx")):
             lines.append(f"  --font-{k}-line-height: {round(float(t['lineHeightPx']), 2)}px;")
     for k, v in sorted(tokens.get("effect", {}).items()):
         lines.append(f"  --shadow-{k}: {v};")

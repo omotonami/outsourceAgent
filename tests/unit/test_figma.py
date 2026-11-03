@@ -105,3 +105,87 @@ def test_b3_input_design_system_plus_one_sample_screen():
     validate(inp, json.load((SCHEMAS / "b3_ui.in.json").open(encoding="utf-8")))
     assert inp["figma_tokens"]["tokens"]["color"]["brand-primary"] == "#0F6E6E"
     assert inp["sample_screen"] == {"id": "1:1", "name": "Home (mẫu)", "children": ["Header", "List"]}
+
+
+# ================= Review cuối #9: CSS injection qua fontFamily; token không theo redirect khác host =================
+@pytest.mark.parametrize("fam", ['Inter"; } body { background: url(//evil) } :root { x: "',
+                                 "Inter\\\";}</style><script>alert(1)</script>",
+                                 "Inter\n} * { display:none }", "Inter;{}<>\\\"'`"])
+def test_font_family_sanitized_in_css(fam):
+    f = json.loads(json.dumps(FILE))
+    f["document"]["children"][0]["children"][0]["children"][1]["style"]["fontFamily"] = fam
+    out = figma.export_tokens(f)
+    css = out["tokens_css"]
+    line = next(l for l in css.splitlines() if "-family:" in l)
+    inner = line.split(": ", 1)[1]
+    assert inner.startswith('"') and inner.endswith('";') and inner.count('"') == 2
+    for bad in (";", "{", "}", "<", ">", "\\", "`"):
+        assert bad not in inner[1:-2]
+    assert css.count("{") == 1 and css.count("}") == 1
+    assert all(c not in out["tokens"]["typography"]["heading-1"]["fontFamily"] for c in '";{}<>\\\n')
+
+
+def test_font_family_valid_names_unchanged():
+    for fam in ("Inter", "Noto Sans JP", "SF Pro-Display", "Be Vietnam Pro", "Source_Code.Pro"):
+        css = figma.tokens_css({"typography": {"h": {"fontFamily": fam}}})
+        assert f'--font-h-family: "{fam}";' in css
+
+
+def test_non_numeric_typography_values_dropped_from_css():
+    css = figma.tokens_css({"typography": {"h": {"fontSize": "12px; } x {", "fontWeight": 700}}})
+    assert "x {" not in css and "--font-h-weight: 700;" in css
+
+
+def test_token_not_forwarded_on_cross_host_redirect():
+    """Server local (offline): A redirect sang host khác → B không nhận X-Figma-Token."""
+    import http.server
+    import threading
+    got = {}
+
+    class B(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            got["b"] = dict(self.headers)
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+        def log_message(self, *a):
+            pass
+    sb = http.server.HTTPServer(("127.0.0.1", 0), B)
+
+    class A(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(302)
+            self.send_header("Location", f"http://localhost:{sb.server_port}/x")
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+    sa = http.server.HTTPServer(("127.0.0.1", 0), A)
+    for s in (sa, sb):
+        threading.Thread(target=s.serve_forever, daemon=True).start()
+    try:
+        status, body = figma.urllib_transport("GET", f"http://127.0.0.1:{sa.server_port}/v1/files/k",
+                                              {"X-Figma-Token": "s3cret", "Accept": "application/json"}, 5)
+    finally:
+        sa.shutdown()
+        sb.shutdown()
+    assert status == 200 and body == b"{}"
+    assert "s3cret" not in json.dumps(got["b"]) and not any(k.lower() == "x-figma-token" for k in got["b"])
+
+
+def test_redirect_handler_keeps_token_only_for_figma_api():
+    h = figma._TokenSafeRedirect()
+    for target, keep in [("https://api.figma.com/v1/files/k2", True), ("https://evil.example/x", False),
+                         ("http://api.figma.com/v1/x", False), ("https://api.figma.com.evil.io/x", False)]:
+        req = urllib.request.Request("https://api.figma.com/v1/files/k", headers={"X-Figma-Token": "s"})
+        new = h.redirect_request(req, None, 302, "Found", {}, target)
+        hdrs = {k.lower(): v for k, v in list(new.header_items())}
+        assert ("x-figma-token" in hdrs) is keep, target
+
+
+def test_effect_with_non_numeric_offset_dropped():
+    f = json.loads(json.dumps(FILE))
+    f["document"]["children"][0]["children"][0]["children"][2]["effects"][0]["offset"]["x"] = "0; } x {"
+    out = figma.export_tokens(f)
+    assert "card-shadow" not in out["tokens"]["effect"] and out["tokens_css"].count("{") == 1

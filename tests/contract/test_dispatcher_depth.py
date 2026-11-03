@@ -79,3 +79,44 @@ def test_counter_released_after_run():
     Dispatcher(_board("p-depth-D", "D1"), _ok).run()
     assert registry.active("p-depth-D") == 0
     Dispatcher(_board("p-depth-D", "D2"), _ok)                      # tạo lại được
+
+
+# ================= Review cuối #6: không gắn cờ vĩnh viễn lên Thread; kiểm theo thời điểm chạy =================
+def test_shared_pool_started_from_worker_no_false_depth_for_other_project():
+    pool = cf.ThreadPoolExecutor(max_workers=1)          # pool dùng chung (http client, logging...)
+    seen = {}
+
+    def w(contract, h):
+        seen["thread"] = pool.submit(threading.current_thread).result()   # thread pool start LẦN ĐẦU từ worker
+        try:                                                              # trong lúc worker chạy: vẫn chặn
+            pool.submit(lambda: Dispatcher(_board("p-depth-E", "E2"), _ok)).result()
+        except DepthExceeded:
+            seen["inside"] = "DepthExceeded"
+        return {"ok": True}
+    assert Dispatcher(_board("p-depth-E", "E1"), w).run()["done"] == ["E1"]
+    assert seen["inside"] == "DepthExceeded"
+    assert not any("lineage" in k for k in vars(seen["thread"]))           # không cờ trên object Thread
+    res = pool.submit(lambda: Dispatcher(_board("p-depth-F", "F1"), _ok).run()).result()
+    assert res["done"] == ["F1"]                                          # trước fix: DepthExceeded giả
+    pool.shutdown()
+
+
+def test_worker_pool_thread_blocked_same_project_while_worker_runs():
+    caught = []
+
+    def w(contract, h):
+        with cf.ThreadPoolExecutor(1) as ex:
+            try:
+                ex.submit(lambda: Dispatcher(_board("p-depth-G", "G2"), _ok)).result()
+            except DepthExceeded as e:
+                caught.append(str(e))
+        return {"ok": True}
+    assert Dispatcher(_board("p-depth-G", "G1"), w).run()["done"] == ["G1"]
+    assert len(caught) == 1
+
+
+def test_threads_outside_workers_unchanged():
+    t = threading.Thread(target=lambda: None)
+    t.start()
+    t.join()
+    assert "run" not in vars(t) and not any("lineage" in k for k in vars(t))

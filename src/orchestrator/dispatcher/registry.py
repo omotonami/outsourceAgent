@@ -2,19 +2,26 @@
 
 Depth tối đa 1, chặn THEO DỰ ÁN (scope = project_id):
 - Thread worker, và mọi thread do worker (hoặc thread con của nó) mở, KHÔNG được tạo/chạy Dispatcher
-  của BẤT KỲ dự án nào → DepthExceeded. Dòng dõi thread được đánh dấu khi `Thread.start()` gọi từ thread
-  thuộc dòng worker (hook cài một lần, chỉ gắn cờ, không đổi hành vi khác của threading).
+  của BẤT KỲ dự án nào → DepthExceeded — trong lúc worker đó CÒN SỐNG (kể cả zombie).
+  Dòng dõi đi qua ContextVar `_LINEAGE` (token của worker), truyền sang thread con bằng
+  src/common/threadctx.py; KHÔNG gắn cờ lên object Thread. Kiểm ở thời điểm gọi: token của worker
+  đã dừng → không còn tính. Vd thread của pool dùng chung được start lần đầu từ worker: sau khi worker
+  dừng, dùng pool đó tạo Dispatcher (dự án khác) là bình thường.
 - Thread không thuộc dòng worker: tạo/chạy Dispatcher của dự án X bị chặn khi X còn worker đang chạy;
   dự án khác chạy bình thường.
 - Worker bị KILL (quá ttl) thành zombie: không còn tính là "đang chạy", nhưng owns của nó vẫn bị giữ với
   MỌI run() sau cùng dự án cho tới khi thread thật sự dừng.
-Giới hạn: thread mở bằng `_thread.start_new_thread` trực tiếp (bỏ qua threading.Thread) không được
-đánh dấu dòng dõi — vẫn bị chặn với dự án của chính worker đó, nhưng không với dự án khác.
+Giới hạn: thread mở bằng `_thread.start_new_thread` trực tiếp (bỏ qua threading.Thread) không mang
+dòng dõi — vẫn bị chặn với dự án của chính worker đó, nhưng không với dự án khác. Thread pool do worker
+mở mang dòng dõi của worker đó cho mọi việc nó chạy tới khi worker dừng.
 """
 from __future__ import annotations
 
+import contextvars
 import threading
 from collections import defaultdict
+
+from src.common import threadctx
 
 
 class DepthExceeded(Exception):
@@ -25,31 +32,27 @@ _REG = threading.Lock()
 _ACTIVE: dict[str, int] = defaultdict(int)   # scope → worker đang chạy (chưa bị KILL)
 _WORKER_THREADS: set[int] = set()            # ident thread worker còn sống (kể cả zombie)
 _ZOMBIES: dict[int, dict] = {}               # id(handle) -> {scope, task_id, owns, done: Event}
-_LINEAGE_ATTR = "_dispatcher_worker_lineage"
+
+
+class _Lineage:
+    """Token dòng dõi của MỘT thread worker; `alive` False khi thread worker thật sự dừng."""
+    __slots__ = ("alive",)
+
+    def __init__(self):
+        self.alive = True
+
+
+_LINEAGE: contextvars.ContextVar[_Lineage | None] = threadctx.track(
+    contextvars.ContextVar("dispatcher_worker_lineage", default=None))
+_TOKENS: dict[int, _Lineage] = {}            # ident thread worker → token của nó
 
 
 def in_worker_lineage() -> bool:
-    """Thread hiện tại là worker, hoặc được mở (trực tiếp/gián tiếp) từ một worker."""
-    return (threading.get_ident() in _WORKER_THREADS
-            or getattr(threading.current_thread(), _LINEAGE_ATTR, False))
-
-
-def _install_lineage_hook() -> None:
-    orig = threading.Thread.start
-    if getattr(orig, "_dispatcher_lineage_hook", False):
-        return
-
-    def start(self, *args, **kwargs):
-        if in_worker_lineage():
-            setattr(self, _LINEAGE_ATTR, True)
-        return orig(self, *args, **kwargs)
-
-    start._dispatcher_lineage_hook = True
-    start.__wrapped__ = orig
-    threading.Thread.start = start
-
-
-_install_lineage_hook()
+    """Thread hiện tại là worker, hoặc được mở (trực tiếp/gián tiếp) từ một worker CÒN SỐNG."""
+    if threading.get_ident() in _WORKER_THREADS:
+        return True
+    tok = _LINEAGE.get()
+    return tok is not None and tok.alive
 
 
 def check_depth(where: str, scope: str | None) -> None:
@@ -84,8 +87,11 @@ def worker_started(scope: str) -> None:
 def thread_enter() -> int:
     """Gọi đầu thread worker: đánh dấu thread là worker."""
     ident = threading.get_ident()
+    tok = _Lineage()
+    _LINEAGE.set(tok)                        # context của thread worker; thread con kế thừa (threadctx)
     with _REG:
         _WORKER_THREADS.add(ident)
+        _TOKENS[ident] = tok
     return ident
 
 
@@ -99,6 +105,9 @@ def thread_exit(ident: int, scope: str, handle) -> None:
     """Gọi cuối thread worker: bỏ đánh dấu; zombie → báo đã dừng, không → giảm số đang chạy."""
     with _REG:
         _WORKER_THREADS.discard(ident)
+        tok = _TOKENS.pop(ident, None)
+        if tok is not None:
+            tok.alive = False
         handle.finished = True
         if handle.zombie:
             z = _ZOMBIES.pop(id(handle), None)

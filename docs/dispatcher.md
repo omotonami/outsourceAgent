@@ -21,7 +21,7 @@ Không LLM nào chọn thứ tự hay số worker.
 - **TTL**: quá `worker_ttl_s` → `KILL` (set `handle.cancelled`), task `blocked`, owns giữ tới khi thread dừng.
 - **Depth 1**: tạo/gọi `Dispatcher` từ thread worker → `DepthExceeded`.
 - **Trace**: `SPAWN / RESULT / BLOCKED / KILL` append vào zone `trace_log` (đã thêm writer `orchestrator`
-  ở `specs/05_blackboard.yaml` + `src/blackboard/permissions.yaml`) — nguồn cho Team feed (H5).
+  ở `specs/05_blackboard.yaml`, nguồn duy nhất runtime đọc) — nguồn cho Team feed (H5).
 - Kết thúc ghi `build_results.{all_checks_pass, qc_critical, loops}` để guard `build_ready` đọc. G3 giữ nguyên.
 
 ## Worker

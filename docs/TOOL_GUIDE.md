@@ -52,7 +52,7 @@ outsourcing-agents-v2/
 ├── src/                      # CODE (Claude Code sinh)
 │   ├── orchestrator/             # state machine + gates + escalation + skill_loader (4 lớp)
 │   ├── gateway/                  # router + llm_client + pii_mask + budget + trace
-│   ├── blackboard/               # store (phân quyền) + schema + permissions
+│   ├── blackboard/               # store (phân quyền đọc từ specs/05_blackboard.yaml) + schema
 │   ├── agents/                   # runtime 4-module + 11 runner
 │   ├── tools/                    # checks + estimation (parametric) + security
 │   ├── store/                    # historical DB (lookup/append/variance, holdout)

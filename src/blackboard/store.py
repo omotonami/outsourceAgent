@@ -5,7 +5,9 @@ import yaml
 from jsonschema import validate
 
 _HERE = Path(__file__).parent
-_PERM = yaml.safe_load((_HERE / "permissions.yaml").read_text(encoding="utf-8"))["zones"]
+# Một nguồn duy nhất: specs/05_blackboard.yaml (không còn bản sao src/blackboard/permissions.yaml — 2026-11-03).
+ZONES_FILE = _HERE.parents[1] / "specs/05_blackboard.yaml"
+_PERM = yaml.safe_load(ZONES_FILE.read_text(encoding="utf-8"))["zones"]
 GATE_UI = "gate_ui"
 # Danh tính máy (agent/hệ thống) không bao giờ được ký gate, kể cả khi khai via=gate_ui.
 _AGENT_IDS = {p.stem for p in (_HERE.parents[1] / "specs/02_agents").glob("*.md")}

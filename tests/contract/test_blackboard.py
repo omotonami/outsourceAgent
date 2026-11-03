@@ -57,3 +57,28 @@ def test_sign_accepts_gate_ui_and_human_via_gate_ui():
     b.sign("G1", by="gate_ui")
     b.sign("G2", by="sales_lead", via="gate_ui")
     assert b.is_signed("G1") and b.is_signed("G2")
+
+
+# Quyết định 2026-11-03 (c): runtime đọc thẳng specs/, không còn bản sao config trong src/
+def test_runtime_reads_specs_single_source():
+    from pathlib import Path
+    import yaml
+    from src.blackboard import store
+    from src.gateway import router
+    root = Path(__file__).parents[2]
+    assert store.ZONES_FILE == root / "specs/05_blackboard.yaml"
+    assert router.ROUTING_FILE == root / "specs/03_routing.yaml"
+    assert not (root / "src/gateway/routing.yaml").exists()
+    assert not (root / "src/blackboard/permissions.yaml").exists()
+    assert store._PERM == yaml.safe_load(store.ZONES_FILE.read_text(encoding="utf-8"))["zones"]
+    assert router._CFG == yaml.safe_load(router.ROUTING_FILE.read_text(encoding="utf-8"))
+
+
+def test_clarify_answers_zone_in_specs():
+    from src.agents import clarify
+    b = Blackboard("p1")
+    b.write("business_context", {"ambiguities": ["q1", "q2"]}, agent="a1_bu")
+    clarify.resolve(b, "q1", "a1")                     # writer 'clarify' theo specs/05_blackboard.yaml
+    assert clarify.pending(b) == ["q2"]
+    with pytest.raises(PermissionDenied):
+        b.write("clarify_answers", [], agent="a1_bu")

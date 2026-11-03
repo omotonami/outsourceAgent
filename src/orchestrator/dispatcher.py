@@ -206,7 +206,7 @@ def worker_agents() -> list[str]:
 
 
 class WorkerBoard:
-    """Board proxy cho worker: đọc được; ghi/append chỉ với danh tính agent con (permissions.yaml
+    """Board proxy cho worker: đọc được; ghi/append chỉ với danh tính agent con (specs/05_blackboard.yaml
     vẫn quyết zone). KHÔNG có sign / revoke_signature / ghi task_backlog / trace_log."""
     __slots__ = ("_WorkerBoard__b", "_WorkerBoard__agents", "project_id")
 

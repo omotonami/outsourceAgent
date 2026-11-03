@@ -3,7 +3,9 @@ from pathlib import Path
 import yaml
 
 TIERS = ["haiku", "sonnet", "opus"]
-_CFG = yaml.safe_load((Path(__file__).parent / "routing.yaml").read_text(encoding="utf-8"))
+# Một nguồn duy nhất: specs/03_routing.yaml (không còn bản sao src/gateway/routing.yaml — quyết định 2026-11-03).
+ROUTING_FILE = Path(__file__).parents[2] / "specs/03_routing.yaml"
+_CFG = yaml.safe_load(ROUTING_FILE.read_text(encoding="utf-8"))
 
 
 def pick_tier(agent: str, step: str = "default", risk_level: str = "normal",

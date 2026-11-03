@@ -164,14 +164,17 @@ def _break_test(r):
     (r / "tests/contract/test_x9_demo.py").unlink()
 
 
-def _drift_routing(r):
-    _edit(r / "src/gateway/routing.yaml", "x9_demo: {default: sonnet, escalate_to: opus}",
-          "x9_demo: {default: opus}")
+def _copy_routing(r):
+    """Bản sao config cũ xuất hiện lại → vi phạm 1 nguồn."""
+    shutil.copy(r / "specs/03_routing.yaml", r / "src/gateway/routing.yaml")
 
 
-def _drift_zone(r):
-    _edit(r / "src/blackboard/permissions.yaml", 'demo_output: {writers: ["x9_demo"], mode: owner_write}',
-          'demo_output: {writers: ["x9_demo"], mode: append_only}')
+def _copy_zones(r):
+    shutil.copy(r / "specs/05_blackboard.yaml", r / "src/blackboard/permissions.yaml")
+
+
+def _runtime_reads_other(r):
+    _edit(r / "src/gateway/router.py", '"specs/03_routing.yaml"', '"src/gateway/routing.yaml"')
 
 
 def _test_only_mentioned(r):
@@ -180,8 +183,9 @@ def _test_only_mentioned(r):
 
 
 @pytest.mark.parametrize("breaker, code", [
-    (_drift_routing, "DRIFT"),
-    (_drift_zone, "DRIFT"),
+    (_copy_routing, "SOURCE"),
+    (_copy_zones, "SOURCE"),
+    (_runtime_reads_other, "SOURCE"),
     (_test_only_mentioned, "TEST"),
     (_break_card, "CARD_FIELD"),
     (_break_forbidden, "FORBIDDEN_EMPTY"),
@@ -322,7 +326,7 @@ def test_write_rolls_back_on_midway_failure(tmp_path, monkeypatch):
     real = scaffold._write_step
 
     def flaky(r, s):
-        if s["path"] == "src/blackboard/permissions.yaml":      # bước cuối: đã ghi 10 bước trước
+        if s["path"] == "specs/05_blackboard.yaml":             # bước cuối: đã ghi 8 bước trước
             raise OSError("disk full")
         return real(r, s)
     monkeypatch.setattr(scaffold, "_write_step", flaky)

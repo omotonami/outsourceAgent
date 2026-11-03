@@ -30,8 +30,13 @@ CARD_FIELDS = {
     "Budget": (["budget"], ["Budget"]),
 }
 SECTIONS = ["Forbidden", "Done when"]          # phải có và không rỗng
-ROUTING_FILES = ["specs/03_routing.yaml", "src/gateway/routing.yaml"]
-ZONE_FILES = ["specs/05_blackboard.yaml", "src/blackboard/permissions.yaml"]
+ROUTING_FILES = ["specs/03_routing.yaml"]
+ZONE_FILES = ["specs/05_blackboard.yaml"]
+# Bản sao config cũ (đã bỏ 2026-11-03). Còn tồn tại → lỗi SOURCE: runtime phải đọc 1 nguồn trong specs/.
+LEGACY_COPIES = ["src/gateway/routing.yaml", "src/blackboard/permissions.yaml"]
+# Module runtime phải đọc đúng file spec (kiểm bằng text: có tham chiếu tới file spec).
+RUNTIME_READERS = {"src/gateway/router.py": "specs/03_routing.yaml",
+                   "src/blackboard/store.py": "specs/05_blackboard.yaml"}
 
 # Ngoại lệ có chủ đích cho agent HIỆN CÓ (không sửa spec của chúng). (agent, code) -> lý do
 ALLOWLIST = {
@@ -143,7 +148,7 @@ def lint_raw(agent_id, root=ROOT):
         except (json.JSONDecodeError, SchemaError) as e:
             add("SCHEMA", f"{p.name} không hợp lệ: {str(e).splitlines()[0]}")
 
-    # 6. Routing (spec + bản runtime)
+    # 6. Routing (một nguồn: specs/03_routing.yaml)
     for rel in ROUTING_FILES:
         cfg = _load_yaml(root, rel)
         if cfg is None or cfg.get("__yaml_error__"):
@@ -151,14 +156,16 @@ def lint_raw(agent_id, root=ROOT):
         elif agent_id not in (cfg.get("agents") or {}):
             add("ROUTING", f"{rel}: thiếu entry agents.{agent_id}")
 
-    # 6b. DRIFT: entry routing của agent ở specs/ và bản runtime src/ phải giống hệt
-    rs, rr = (_load_yaml(root, rel) for rel in ROUTING_FILES)
-    if rs and rr and not rs.get("__yaml_error__") and not rr.get("__yaml_error__"):
-        es, er = (rs.get("agents") or {}).get(agent_id), (rr.get("agents") or {}).get(agent_id)
-        if es is not None and er is not None and es != er:
-            add("DRIFT", f"routing agents.{agent_id} khác nhau: {ROUTING_FILES[0]}={es} ≠ {ROUTING_FILES[1]}={er}")
+    # 6b. SOURCE: runtime đọc 1 nguồn (specs/). Không được có bản sao config trong src/.
+    for rel in LEGACY_COPIES:
+        if (root / rel).exists():
+            add("SOURCE", f"{rel} là bản sao config — xoá; runtime đọc thẳng specs/")
+    for mod, spec_rel in RUNTIME_READERS.items():
+        p = root / mod
+        if p.exists() and f'"{spec_rel}"' not in p.read_text(encoding="utf-8"):   # literal trong code
+            add("SOURCE", f"{mod} không đọc {spec_rel}")
 
-    # 7. Zone: owner_write không được trùng writer là agent khác; zone khai báo phải tồn tại ở cả 2 file
+    # 7. Zone: owner_write không được trùng writer là agent khác; zone khai báo phải tồn tại
     agents = set(agent_ids(root))
     declared = meta.get("zone")
     for rel in ZONE_FILES:
@@ -177,16 +184,6 @@ def lint_raw(agent_id, root=ROOT):
                 others = sorted(set(w) & agents - {agent_id})
                 if others:
                     add("ZONE_SHARED", f"{rel}: zone owner_write '{zname}' trùng writer với {others}")
-
-    # 7b. DRIFT: mọi zone có agent là writer phải giống hệt giữa specs/ và src/
-    zs, zr = (_load_yaml(root, rel) for rel in ZONE_FILES)
-    if zs and zr and not zs.get("__yaml_error__") and not zr.get("__yaml_error__"):
-        a, b = zs.get("zones") or {}, zr.get("zones") or {}
-        mine = {n for zones in (a, b) for n, z in zones.items()
-                if agent_id in ((z or {}).get("writers") or [])}
-        for n in sorted(mine):
-            if a.get(n) != b.get(n):
-                add("DRIFT", f"zone '{n}' khác nhau: {ZONE_FILES[0]}={a.get(n)} ≠ {ZONE_FILES[1]}={b.get(n)}")
 
     # 8. Runner + test
     if not (root / f"src/agents/{agent_id}.py").exists():

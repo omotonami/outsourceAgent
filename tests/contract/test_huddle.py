@@ -140,13 +140,13 @@ def test_huddle_run_leaves_product_zones_untouched():
 
 
 def test_zone_files_in_sync():
-    for rel in ("specs/05_blackboard.yaml", "src/blackboard/permissions.yaml"):
+    for rel in ("specs/05_blackboard.yaml",):
         z = yaml.safe_load((ROOT / rel).read_text(encoding="utf-8"))["zones"]
         assert z["huddle_log"]["mode"] == "append_only" and "huddle" in z["huddle_log"]["writers"]
         assert z["decision_records"] == {"writers": ["huddle"], "mode": "append_only"}
         roles = huddle.config()["roles"].values()
         assert {a for r in roles for a in r.values()} <= set(z["huddle_log"]["writers"])
-    for rel in ("specs/03_routing.yaml", "src/gateway/routing.yaml"):
+    for rel in ("specs/03_routing.yaml",):
         assert "huddle" in yaml.safe_load((ROOT / rel).read_text(encoding="utf-8"))["agents"]
 
 

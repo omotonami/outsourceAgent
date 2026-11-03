@@ -11,12 +11,13 @@
 2. **Scaffold** (`src/factory/scaffold.py`, không LLM) sinh:
    `specs/02_agents/<id>.md` (Card v5 + prompt 4 module, `subordinates`, `anti_jobs`) ·
    `specs/04_schemas/<id>.in/out.json` · `src/agents/<id>.py` · `knowledge/<role>/team|personal/_template` ·
-   `tests/contract/test_<id>.py`; chèn entry vào `specs/03_routing.yaml` + `src/gateway/routing.yaml`,
-   zone vào `specs/05_blackboard.yaml` + `src/blackboard/permissions.yaml` (giữ comment, parse lại để kiểm).
+   `tests/contract/test_<id>.py`; chèn entry vào `specs/03_routing.yaml`, zone vào `specs/05_blackboard.yaml`
+   (giữ comment, parse lại để kiểm). Runtime (`router.py`, `blackboard/store.py`) đọc thẳng 2 file này — không còn bản sao.
    Mặc định dry-run; **không ghi đè** file/entry/zone/role đã có (`ScaffoldError`, không ghi dở dang).
 3. **Lint** (`src/factory/agent_lint.py`): Card v5 đủ field, Forbidden/Done when không rỗng, prompt có
-   MODULE 1–4 + `{SKILL_GUIDANCE}`, role = hậu tố id và duy nhất, schema JSON hợp lệ, routing ở cả 2 file,
-   zone owner_write không trùng writer agent khác, có runner, có test.
+   MODULE 1–4 + `{SKILL_GUIDANCE}`, role = hậu tố id và duy nhất, schema JSON hợp lệ, có entry routing,
+   zone owner_write không trùng writer agent khác, có runner, có test; SOURCE: không còn bản sao config
+   trong `src/` và runtime đọc literal `specs/03_routing.yaml` / `specs/05_blackboard.yaml`.
 
 ## Lệnh
 ```bash

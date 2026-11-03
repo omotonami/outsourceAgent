@@ -5,7 +5,7 @@ Sinh/ghi:
          knowledge/<role>/team/SKILL.md · knowledge/<role>/personal/_template/SKILL.md
          tests/contract/test_<id>.py
   append specs/03_routing.yaml (agents) · specs/05_blackboard.yaml (zones)
-         + bản runtime: src/gateway/routing.yaml · src/blackboard/permissions.yaml
+         (runtime đọc thẳng 2 file này — không còn bản sao trong src/, quyết định 2026-11-03)
 Mặc định dry_run=True: chỉ trả danh sách việc sẽ làm. Không ghi đè file/entry đã có (raise ScaffoldError).
 YAML được chèn dạng text (giữ comment), sau đó parse lại để chắc không phá file.
 Ghi thật (dry_run=False) CHỈ trên nhánh git `factory/<id>` (output là branch/PR, người duyệt);
@@ -20,8 +20,8 @@ import yaml
 
 ROOT = Path(__file__).parents[2]
 
-ROUTING_FILES = ["specs/03_routing.yaml", "src/gateway/routing.yaml"]
-ZONE_FILES = ["specs/05_blackboard.yaml", "src/blackboard/permissions.yaml"]
+ROUTING_FILES = ["specs/03_routing.yaml"]
+ZONE_FILES = ["specs/05_blackboard.yaml"]
 
 
 class ScaffoldError(Exception):

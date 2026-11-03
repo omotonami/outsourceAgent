@@ -30,7 +30,7 @@ def main():
             last = open("eval/runs/trace.jsonl",encoding="utf-8").read().strip().splitlines()[-1]
             t = json.loads(last)
             print(f"TRACE: model={t['model']} tokens={t['usage'].get('total_tokens')} phase={t['phase']}")
-        except Exception:
+        except (OSError, IndexError, ValueError, KeyError):   # chưa có trace / dòng lạ: bỏ qua phần in
             pass
     else:
         print("Lỗi:", res)

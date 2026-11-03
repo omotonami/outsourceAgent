@@ -25,6 +25,8 @@ AGENT = "huddle"
 ZONES = ("huddle_log", "decision_records")   # zone DUY NHẤT huddle được chạm tới
 RECORD_SCHEMA = cfgload.load_json("specs/04_schemas/decision_record.json")
 _SRC = f"{cfgload.BUDGETS} → huddle"
+TURN_FALLBACK_CHARS = 500     # lượt nói không phải JSON → giữ tối đa từng này ký tự làm summary
+SUMMARY_MAX_CHARS = 1000      # summary một lượt nói ghi huddle_log
 
 
 def config():
@@ -113,8 +115,8 @@ class _Run:
             if not isinstance(data, dict):
                 raise ValueError
         except ValueError:                     # JSONDecodeError là ValueError; lượt nói lỗi không chặn huddle
-            data = {"summary": text.strip()[:500]}
-        self.speak(rnd, role, str(data.get("summary") or "")[:1000])
+            data = {"summary": text.strip()[:TURN_FALLBACK_CHARS]}
+        self.speak(rnd, role, str(data.get("summary") or "")[:SUMMARY_MAX_CHARS])
         return data
 
     # --- kết thúc ---
@@ -158,7 +160,7 @@ class _Run:
                 validate(rec, RECORD_SCHEMA)
                 if rec["chosen"] is not None and rec["chosen"] not in rec["options"]:
                     raise ValidationError(f"chosen '{rec['chosen']}' không nằm trong options")
-                self.speak(rnd, "decider", rec.get("rationale", "")[:1000])
+                self.speak(rnd, "decider", rec.get("rationale", "")[:SUMMARY_MAX_CHARS])
                 return self.finish(rec)
             except (ValueError, ValidationError) as e:
                 last = getattr(e, "message", None) or str(e)

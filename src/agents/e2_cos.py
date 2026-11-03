@@ -6,7 +6,7 @@ H5 Chief of Staff — một cửa cho người:
   qua CosBoard read-only → LLM (runtime, gateway) → {understanding, clarifications, plan, assignments,
   decisions_needed}. Code kiểm assignments trỏ tới agent có spec (không gate_ui, không chính cos).
 - confirm() + submit(): CHỈ 2 loại yêu cầu thay người, chỉ khi người xác nhận (confirmed_by là người,
-  hash payload khớp — cùng cơ chế src/factory/interview.confirm):
+  hash payload khớp — cơ chế chung src/governance/confirm.py):
     lead_brief      → ghi với danh tính "intake" (writer hiện có, schema lead_brief) — chỉ khi CHƯA có
     clarify_answers → clarify.resolve (câu hỏi phải đang pending)
   Mọi thứ khác (ký/thu hồi gate, zone sản phẩm, risk, trace) → PermissionDenied.
@@ -17,7 +17,7 @@ from jsonschema import validate
 
 from src.agents import clarify, runtime
 from src.blackboard.store import PermissionDenied, _schema as _zone_schema
-from src.factory import interview
+from src.governance import confirm as human
 from src.orchestrator import team_feed
 
 ID, ROLE, PHASE = "e2_cos", "cos", "presales"
@@ -111,11 +111,9 @@ def confirm(kind, payload, *, confirmed_by):
     """Người xác nhận yêu cầu cos soạn → bản ghi cho submit(). confirmed_by phải là người."""
     if kind not in REQUEST_KINDS:
         raise PermissionDenied(f"{ID} không được tạo yêu cầu loại {kind!r} (chỉ {REQUEST_KINDS})")
-    who = str(confirmed_by or "")
-    if not who.strip() or interview._is_machine(who):
-        raise PermissionDenied(f"confirmed_by phải là người, không phải {who!r}")
-    return {"kind": kind, "payload": payload, "confirmed": True, "confirmed_by": who.strip(),
-            "payload_hash": interview.answers_hash({"kind": kind, "payload": payload})}
+    who = human.require_human(confirmed_by, PermissionDenied, "confirmed_by phải là người, không phải {who!r}")
+    return {"kind": kind, "payload": payload, "confirmed": True, "confirmed_by": who,
+            "payload_hash": human.payload_hash({"kind": kind, "payload": payload})}
 
 
 def _verified(record):
@@ -124,10 +122,8 @@ def _verified(record):
     kind = record.get("kind")
     if kind not in REQUEST_KINDS:
         raise PermissionDenied(f"{ID} không được tạo yêu cầu loại {kind!r}")
-    who = str(record.get("confirmed_by") or "")
-    if not who.strip() or interview._is_machine(who):
-        raise PermissionDenied(f"confirmed_by không hợp lệ: {who!r}")
-    if record.get("payload_hash") != interview.answers_hash({"kind": kind, "payload": record.get("payload")}):
+    human.require_human(record.get("confirmed_by"), PermissionDenied, "confirmed_by không hợp lệ: {who!r}")
+    if record.get("payload_hash") != human.payload_hash({"kind": kind, "payload": record.get("payload")}):
         raise PermissionDenied("payload bị sửa sau khi xác nhận (hash không khớp)")
     return kind, record["payload"]
 

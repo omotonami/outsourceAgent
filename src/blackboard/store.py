@@ -5,16 +5,13 @@ from pathlib import Path
 from jsonschema import validate
 
 from src.common import config
+from src.governance import confirm
 
 _HERE = Path(__file__).parent
 # Một nguồn duy nhất: specs/05_blackboard.yaml (không còn bản sao src/blackboard/permissions.yaml — 2026-11-03).
 ZONES_FILE = config.path("specs/05_blackboard.yaml")
 _PERM = config.require(config.load_yaml(ZONES_FILE), "zones", "specs/05_blackboard.yaml")
-GATE_UI = "gate_ui"
-# Danh tính máy (agent/hệ thống) không bao giờ được ký gate, kể cả khi khai via=gate_ui.
-_AGENT_IDS = config.agent_ids()
-_MACHINE_IDS = ({w for z in _PERM.values() for w in z["writers"]} | _AGENT_IDS
-                | {"orchestrator", "gateway", "dispatcher"}) - {GATE_UI}
+GATE_UI = confirm.GATE_UI
 
 
 class PermissionDenied(Exception):
@@ -55,11 +52,11 @@ class Blackboard:
         self._check(zone, agent, "append_only")
         self._data.setdefault(zone, []).append({**entry, "source_agent": entry.get("source_agent", agent)})
 
-    # Chữ ký gate: chỉ gate_ui (hoặc người ký qua gate_ui). Agent/hệ thống/auto-* bị từ chối.
+    # Chữ ký gate: chỉ gate_ui (hoặc người ký qua gate_ui). Agent/hệ thống/auto-* bị từ chối
+    # (danh sách máy dùng chung: src/governance/confirm.py), kể cả khi khai via=gate_ui.
     def sign(self, gate, by, via=None):
         who = str(by or "").strip()
-        machine = (who in _MACHINE_IDS or who.split(".", 1)[0] in _MACHINE_IDS
-                   or who.lower().startswith("auto"))
+        machine = confirm.is_machine(who)
         if not who or machine or not (who == GATE_UI or via == GATE_UI):
             raise PermissionDenied(f"chỉ {GATE_UI} được ký gate (by={by!r}, via={via!r})")
         self._signatures[gate] = {"by": who, "via": GATE_UI, "valid": True}

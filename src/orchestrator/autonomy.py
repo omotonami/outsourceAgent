@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Callable
 
 from src.common import config as cfgload, jsonl
+from src.governance import confirm as human
 
 ROOT = cfgload.ROOT
 CONFIG = ROOT / cfgload.AUTONOMY
@@ -205,8 +206,7 @@ class Autonomy:
         if not approved_by or not str(approved_by).strip():
             raise AutonomyRefused("promote cần approved_by là người")
         bots = set(self.promote_cfg.get("reject_approvers") or []) | {agent}
-        if approved_by in bots or str(approved_by).lower().startswith("auto"):
-            raise AutonomyRefused(f"'{approved_by}' không phải người duyệt hợp lệ")
+        human.require_human(approved_by, AutonomyRefused, "'{who}' không phải người duyệt hợp lệ", extra=bots)
         if to is not None and _num(to) > HARD_MAX:
             raise AutonomyRefused(f"{to} vượt mức tối đa cứng L{HARD_MAX} (L3 bảo lưu)")
         st = self._load()

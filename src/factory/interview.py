@@ -5,14 +5,13 @@ confirm(..., confirmed_by=<người>) → bản ghi có confirmed_by + hash answ
 đã xác nhận hợp lệ (hash khớp) và CHỈ đọc các khoá thuộc QUESTIONS — khoá lạ (steps, subordinates,
 owner, budget...) do LLM/nguồn khác nhét vào bị bỏ ở confirm và bị từ chối ở build_spec.
 """
-import hashlib
-import json
 import re
 from pathlib import Path
 
 import yaml
 
 from src.common import config
+from src.governance import confirm as human
 
 ROOT = config.ROOT
 
@@ -62,16 +61,7 @@ def default_budget(root=ROOT) -> str:
     return f"token ≤ {b['tokens_per_call']}/lần · timeout {b['timeout_s']}s · retry ≤ {b['max_retries']}"
 
 
-def answers_hash(answers: dict) -> str:
-    blob = json.dumps(answers, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-    return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
-
-
-def _is_machine(who: str) -> bool:
-    from src.blackboard import store
-    w = who.strip()
-    return (w in store._MACHINE_IDS or w.split(".", 1)[0] in store._MACHINE_IDS
-            or w.lower().startswith("auto") or w == "factory_interviewer")
+answers_hash = human.payload_hash          # tên cũ (field answers_hash của bản ghi xác nhận)
 
 
 def confirmed_answers(record) -> dict:
@@ -79,9 +69,8 @@ def confirmed_answers(record) -> dict:
     if not isinstance(record, dict) or record.get("label") == "RECOMMENDATION" \
             or record.get("confirmed") is not True:
         raise ValueError("Bản nháp chưa được người xác nhận — dùng interview.confirm(..., confirmed_by=...)")
-    who = str(record.get("confirmed_by") or "")
-    if not who.strip() or _is_machine(who):
-        raise ValueError(f"confirmed_by không hợp lệ: {who!r} (phải là người)")
+    human.require_human(record.get("confirmed_by"), ValueError,
+                        "confirmed_by không hợp lệ: {who!r} (phải là người)")
     a = record.get("answers")
     if not isinstance(a, dict):
         raise ValueError("bản ghi xác nhận thiếu answers")
@@ -205,12 +194,10 @@ def draft_from_llm(idea: str, sender=None, project_id="factory") -> dict:
 def confirm(draft: dict, edits: dict | None = None, *, confirmed_by: str) -> dict:
     """Người xác nhận bản nháp (hoặc answers thô), có thể kèm sửa -> bản ghi cho build_spec:
     {confirmed: True, confirmed_by, answers (chỉ khoá QUESTIONS), answers_hash, dropped_keys}."""
-    who = str(confirmed_by or "")
-    if not who.strip() or _is_machine(who):
-        raise ValueError(f"confirmed_by phải là người, không phải {who!r}")
+    who = human.require_human(confirmed_by, ValueError, "confirmed_by phải là người, không phải {who!r}")
     base = draft.get("answers", draft) if isinstance(draft, dict) else {}
     merged = {**base, **(edits or {})}
     answers = {k: merged[k] for k in ANSWER_KEYS if k in merged}
-    return {"confirmed": True, "confirmed_by": who.strip(), "answers": answers,
+    return {"confirmed": True, "confirmed_by": who, "answers": answers,
             "answers_hash": answers_hash(answers),
             "dropped_keys": sorted(k for k in merged if k not in ANSWER_KEYS)}

@@ -16,6 +16,8 @@ zones:
   risk_register: {writers: ["*"], mode: append_only}  # Append-only, có source_agent; chỉ PM đổi status
   revision_log: {writers: ["*"], mode: append_only}
   trace_log: {writers: ["gateway", "orchestrator"], mode: append_only}  # Append-only. orchestrator: Dispatcher (H2) ghi SPAWN/RESULT/BLOCKED/KILL cho Team feed
+  huddle_log: {writers: ["a1_bu", "a2_estimation", "b1_ba", "b2_ux", "b4_tech_lead", "huddle"], mode: append_only}  # H3: lượt nói {round, agent, role, summary}; không hiển thị ở gate
+  decision_records: {writers: ["huddle"], mode: append_only}  # H3: kết quả huddle (specs/04_schemas/decision_record.json); G1/G2 hiển thị
 
 retention:
   drafts_days: 30

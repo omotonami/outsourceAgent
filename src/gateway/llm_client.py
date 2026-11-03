@@ -1,5 +1,6 @@
 """Điểm DUY NHẤT gọi model. Enforce provider/region, PII mask, budget, trace.
 Cần: pip install anthropic ; biến môi trường ANTHROPIC_API_KEY."""
+import json
 from pathlib import Path
 import yaml
 from . import pii_mask, budget, trace
@@ -21,12 +22,24 @@ def call(agent, tier, system, messages, project_id, phase,
     """Trả (text, usage). `sender` để test inject mock."""
     model = _LOCK[tier]
     messages = [pii_mask.mask_message(m) for m in messages]
-    budget.check(project_id, phase)
-    text, usage = (sender or _send)(model, system, messages, max_tokens)
-    budget.add(project_id, phase, usage.get("total_tokens", 0))
+    # Giữ chỗ cận trên TRƯỚC khi gọi (mỗi token ≥ 1 byte UTF-8 → số byte input là cận trên an toàn),
+    # rồi trừ theo usage thực tế. Vượt trần → BudgetExceeded, không gọi model.
+    res = budget.reserve_call(project_id, phase, max_tokens + input_bound(system, messages))
+    try:
+        text, usage = (sender or _send)(model, system, messages, max_tokens)
+    except BaseException:
+        budget.cancel(res)
+        raise
+    budget.commit(res, usage.get("total_tokens", 0))
     trace.log(agent=agent, model=model, tier=tier, skill_versions=skill_versions or {},
               usage=usage, project_id=project_id, phase=phase)
     return text, usage
+
+
+def input_bound(system, messages) -> int:
+    """Cận trên số token input: tổng byte UTF-8 của system + messages (đã serialize)."""
+    return len(str(system or "").encode("utf-8")) + sum(
+        len(json.dumps(m, ensure_ascii=False).encode("utf-8")) for m in messages)
 
 
 def _send(model, system, messages, max_tokens):

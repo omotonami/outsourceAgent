@@ -5,10 +5,16 @@ CODE thuần, không LLM quyết thứ tự hay số worker:
 - Song song: concurrent.futures, tối đa `dispatcher.max_parallel` (config/budgets.yaml).
 - Mỗi worker một Spawn Contract hợp lệ theo specs/04_schemas/spawn_contract.json.
 - `owns` của các worker đang chạy không giao nhau; giao → task chờ.
-- Budget worker trừ từ budget phase build; vượt → ngừng spawn (escalation.should_escalate).
+- Budget: dùng CHUNG sổ gateway (src/gateway/budget.py). Mỗi worker giữ chỗ `worker_tokens` trên sổ
+  phase build; mọi lần gọi model trong worker rút từ allocation đó. Hết chỗ → ngừng spawn.
 - Substate: ready → in_dev → testing → qc → await_merge. KHÔNG BAO GIỜ ghi `merged`
   (chỉ sau G3 do người ký). Retry ≤ max_build_loops; fail → blocked.
-- Depth tối đa 1: gọi Dispatcher từ trong worker → DepthExceeded.
+- Depth tối đa 1: sổ cấp module (có lock) đếm worker đang chạy trong tiến trình; còn worker sống
+  (kể cả thread con do worker mở) thì tạo/chạy Dispatcher → DepthExceeded.
+- Worker bị KILL (quá ttl) thành zombie trong sổ cấp module: owns của nó vẫn bị giữ với MỌI run()
+  sau cùng dự án cho tới khi thread thật sự dừng. Thread worker là daemon → không treo lúc thoát.
+- Worker nhận board proxy (WorkerBoard): chỉ đọc + ghi đúng zone của agent con; không có sign/revoke.
+- Số (max_parallel, ttl, kill_grace, worker_tokens) đọc từ config/budgets.yaml; thiếu → ConfigError.
 - Sự kiện SPAWN / RESULT / BLOCKED / KILL ghi append-only vào zone `trace_log`.
 """
 from __future__ import annotations
@@ -22,6 +28,9 @@ from typing import Callable
 
 import yaml
 from jsonschema import validate
+
+from src.blackboard.store import PermissionDenied
+from src.gateway import budget as ledger
 
 from . import escalation
 
@@ -44,7 +53,7 @@ ANTI_JOB = [
     "Không tự chuyển task sang merged (chỉ sau G3 do người ký)",
 ]
 
-_LOCAL = threading.local()
+PHASE = "build"
 
 
 class DepthExceeded(Exception):
@@ -55,9 +64,39 @@ class CycleError(ValueError):
     pass
 
 
-def _cfg(key, default):
-    v = (_BUDGETS.get("dispatcher") or {}).get(key)
-    return default if v is None else v
+class ConfigError(KeyError):
+    pass
+
+
+def _cfg(key, nullable=False):
+    """Đọc dispatcher.<key> trong config/budgets.yaml. Không có default hard-code."""
+    sec = _BUDGETS.get("dispatcher")
+    if not isinstance(sec, dict) or key not in sec:
+        raise ConfigError(f"config/budgets.yaml: thiếu 'dispatcher.{key}'")
+    v = sec[key]
+    if v is None and not nullable:
+        raise ConfigError(f"config/budgets.yaml: 'dispatcher.{key}' không được null")
+    return v
+
+
+# ---------- Sổ cấp module: depth guard + zombie ----------
+_REG = threading.Lock()
+_ACTIVE = 0                        # worker đang chạy (chưa bị KILL) trong tiến trình
+_WORKER_THREADS: set[int] = set()  # ident thread worker còn sống (kể cả zombie)
+_ZOMBIES: dict[int, dict] = {}     # id(handle) -> {scope, task_id, owns, done: Event}
+
+
+def _check_depth(where: str) -> None:
+    with _REG:
+        if _ACTIVE > 0 or threading.get_ident() in _WORKER_THREADS:
+            raise DepthExceeded(f"worker không được {where} Dispatcher (depth tối đa 1; "
+                                f"{_ACTIVE} worker đang chạy)")
+
+
+def live_zombies(scope=None) -> list[dict]:
+    """Worker đã KILL nhưng thread chưa dừng (scope=None: mọi dự án)."""
+    with _REG:
+        return [dict(z) for z in _ZOMBIES.values() if scope is None or z["scope"] == scope]
 
 
 def check_dag(tasks: list[dict]) -> list[str]:
@@ -103,19 +142,60 @@ def default_owns(task: dict) -> list[str]:
     return list(task.get("owns") or [EXCLUSIVE])
 
 
-class WorkerHandle:
-    """Cái duy nhất worker nhận ngoài contract: báo substate + biết khi bị KILL."""
+def worker_agents() -> list[str]:
+    """Agent con được chạy trong worker = subordinates của B4 (specs/02_agents/b4_tech_lead.md)."""
+    text = (ROOT / "specs/02_agents/b4_tech_lead.md").read_text(encoding="utf-8")
+    meta = yaml.safe_load(text.split("---", 2)[1]) or {}
+    subs = meta.get("subordinates")
+    if not subs:
+        raise ConfigError("specs/02_agents/b4_tech_lead.md: thiếu 'subordinates'")
+    return list(subs)
 
-    def __init__(self, dispatcher: "Dispatcher", task_id: str):
+
+class WorkerBoard:
+    """Board proxy cho worker: đọc được; ghi/append chỉ với danh tính agent con (permissions.yaml
+    vẫn quyết zone). KHÔNG có sign / revoke_signature / ghi task_backlog / trace_log."""
+    __slots__ = ("_WorkerBoard__b", "_WorkerBoard__agents", "project_id")
+
+    def __init__(self, board, agents):
+        self.__b, self.__agents = board, frozenset(agents)
+        self.project_id = getattr(board, "project_id", None)
+
+    def get(self, zone):
+        return self.__b.get(zone)
+
+    def is_signed(self, gate):
+        return self.__b.is_signed(gate)
+
+    def _who(self, agent):
+        if agent not in self.__agents:
+            raise PermissionDenied(f"worker chỉ ghi với danh tính {sorted(self.__agents)}, không phải {agent!r}")
+
+    def write(self, zone, value, agent):
+        self._who(agent)
+        return self.__b.write(zone, value, agent=agent)
+
+    def append(self, zone, entry, agent):
+        self._who(agent)
+        return self.__b.append(zone, entry, agent=agent)
+
+
+class WorkerHandle:
+    """Cái duy nhất worker nhận ngoài contract: báo substate, board proxy, biết khi bị KILL."""
+
+    def __init__(self, dispatcher: "Dispatcher", task_id: str, board: WorkerBoard | None = None):
         self._d, self.task_id = dispatcher, task_id
         self.cancelled = threading.Event()
+        self.board = board
+        self.zombie = False
+        self.finished = False
 
     def report(self, substate: str) -> None:
         if substate not in WORKER_STATES:
             raise PermissionError(f"worker chỉ được báo {WORKER_STATES}, không được '{substate}'")
         if self.cancelled.is_set():
             return
-        self._d._set_status(self.task_id, substate)
+        self._d._set_status(self.task_id, substate, _handle=self)   # kiểm lại cancelled trong lock
 
 
 Worker = Callable[[dict, WorkerHandle], dict]
@@ -123,25 +203,25 @@ Worker = Callable[[dict, WorkerHandle], dict]
 
 class Dispatcher:
     def __init__(self, board, worker: Worker | None = None, *, max_parallel: int | None = None,
-                 phase_budget: int | None = ..., worker_tokens: int | None = ...,
-                 ttl: float | None = None, owns_of: Callable[[dict], list[str]] = default_owns,
+                 worker_tokens: int | None = ..., ttl: float | None = None,
+                 owns_of: Callable[[dict], list[str]] = default_owns,
                  repo: str | Path | None = None, output_schema: str = "specs/04_schemas/c3_qc.out.json",
-                 kill_grace_s: float = 5.0):
-        if getattr(_LOCAL, "in_worker", False):
-            raise DepthExceeded("worker không được tạo Dispatcher (depth tối đa 1)")
+                 kill_grace_s: float | None = None):
+        _check_depth("tạo")
         self.board = board
-        self.worker = worker or default_pipeline(board)
-        self.max_parallel = int(max_parallel or _cfg("max_parallel", 3))
+        self.project_id = getattr(board, "project_id", None) or "p"
+        self.scope = self.project_id
+        self.worker = worker or default_pipeline()
+        self.worker_agents = worker_agents()
+        self.max_parallel = int(_cfg("max_parallel") if max_parallel is None else max_parallel)
         if self.max_parallel < 1:
             raise ValueError("max_parallel phải ≥ 1")
-        self.phase_budget = (_BUDGETS["per_project_tokens"].get("build")
-                             if phase_budget is ... else phase_budget)
-        self.worker_tokens = _cfg("worker_tokens", None) if worker_tokens is ... else worker_tokens
-        self.ttl = float(ttl or _cfg("worker_ttl_s", 1800))
+        self.worker_tokens = _cfg("worker_tokens", nullable=True) if worker_tokens is ... else worker_tokens
+        self.ttl = float(_cfg("worker_ttl_s") if ttl is None else ttl)
+        self.kill_grace_s = float(_cfg("kill_grace_s") if kill_grace_s is None else kill_grace_s)
         self.owns_of, self.repo, self.output_schema = owns_of, repo, output_schema
-        self.kill_grace_s = kill_grace_s
         self._lock = threading.RLock()
-        self.used_tokens = 0
+        self._used_start = ledger.used(self.project_id, PHASE)
         self.escalation: str | None = None
         self.attempts: dict[str, int] = {}
         self.worktrees: dict[str, str] = {}
@@ -152,12 +232,18 @@ class Dispatcher:
     def _backlog(self) -> list[dict]:
         return self.board.get("task_backlog") or []
 
-    def _set_status(self, task_id: str, status: str, **extra) -> None:
+    @property
+    def used_tokens(self) -> int:
+        return ledger.used(self.project_id, PHASE) - self._used_start
+
+    def _set_status(self, task_id: str, status: str, _handle: "WorkerHandle | None" = None, **extra) -> None:
         if status == "merged":
             raise PermissionError("Dispatcher không được chuyển merged — chỉ sau G3 do người ký")
         if status not in SUBSTATES and status != BLOCKED:
             raise ValueError(f"substate lạ: {status}")
         with self._lock:
+            if _handle is not None and _handle.cancelled.is_set():   # TOCTOU: KILL xảy ra sau lần kiểm đầu
+                return
             tb = self._backlog()
             for t in tb:
                 if t["id"] == task_id:
@@ -191,33 +277,79 @@ class Dispatcher:
         validate(contract, CONTRACT_SCHEMA)
         return contract
 
-    # ---------- Budget ----------
-    def _over_budget(self) -> bool:
-        if self.phase_budget is None:
-            return False
-        need = self.worker_tokens or 0
-        return self.used_tokens + need > self.phase_budget or self.used_tokens >= self.phase_budget
+    # ---------- Budget (sổ chung của gateway) ----------
+    def _allocate(self):
+        """Giữ chỗ worker_tokens trên sổ gateway. None nếu không cấu hình worker_tokens.
+        Hết chỗ → BudgetExceeded."""
+        if self.worker_tokens:
+            return ledger.reserve(self.project_id, PHASE, self.worker_tokens)
+        rem = ledger.remaining(self.project_id, PHASE)
+        if rem is not None and rem <= 0:
+            raise ledger.BudgetExceeded(f"{self.project_id}/{PHASE} hết budget")
+        return None
 
     # ---------- Chạy ----------
-    def _run_worker(self, contract: dict, handle: WorkerHandle) -> dict:
-        _LOCAL.in_worker = True
-        try:
-            with self._lock:
-                self._live += 1
-                self.max_concurrency = max(self.max_concurrency, self._live)
-            return self.worker(contract, handle)
-        finally:
-            with self._lock:
-                self._live -= 1
-            _LOCAL.in_worker = False
+    def _spawn(self, contract: dict, handle: WorkerHandle, alloc) -> cf.Future:
+        """Thread daemon (không ThreadPoolExecutor): zombie không làm treo tiến trình lúc thoát."""
+        global _ACTIVE
+        fut: cf.Future = cf.Future()
+        fut.set_running_or_notify_cancel()
+        with _REG:
+            _ACTIVE += 1
+        with self._lock:
+            self._live += 1
+            self.max_concurrency = max(self.max_concurrency, self._live)
+
+        def main():
+            global _ACTIVE
+            ident = threading.get_ident()
+            with _REG:
+                _WORKER_THREADS.add(ident)
+            res, exc = None, None
+            try:
+                with ledger.use_allocation(alloc):
+                    res = self.worker(contract, handle)
+            except BaseException as e:  # noqa: BLE001 — chuyển cho Dispatcher qua Future
+                exc = e
+            finally:
+                ledger.release(alloc)
+                with _REG:
+                    _WORKER_THREADS.discard(ident)
+                    handle.finished = True
+                    if handle.zombie:
+                        z = _ZOMBIES.pop(id(handle), None)
+                        if z:
+                            z["done"].set()
+                    else:
+                        _ACTIVE -= 1
+                with self._lock:
+                    self._live -= 1
+                if exc is not None:
+                    fut.set_exception(exc)
+                else:
+                    fut.set_result(res)
+
+        threading.Thread(target=main, name=f"c-worker-{handle.task_id}", daemon=True).start()
+        return fut
+
+    def _zombify(self, handle: WorkerHandle, owns: list[str]) -> bool:
+        """Đánh dấu worker quá ttl là zombie (owns vẫn bị giữ). False nếu nó vừa kịp xong."""
+        global _ACTIVE
+        with _REG:
+            if handle.finished:
+                return False
+            handle.zombie = True
+            _ACTIVE -= 1
+            _ZOMBIES[id(handle)] = {"scope": self.scope, "task_id": handle.task_id, "owns": list(owns),
+                                    "done": threading.Event()}
+        return True
 
     def _block(self, task_id: str, reason: str) -> None:
         self._set_status(task_id, BLOCKED, blocked_reason=reason)
         self._event("BLOCKED", task_id, reason=reason)
 
     def run(self) -> dict:
-        if getattr(_LOCAL, "in_worker", False):
-            raise DepthExceeded("worker không được gọi Dispatcher (depth tối đa 1)")
+        _check_depth("chạy")
         tasks = self._backlog()
         check_dag(tasks)
         # Trạng thái dở từ lần chạy trước (không phải xong/blocked) → làm lại từ đầu.
@@ -226,99 +358,107 @@ class Dispatcher:
                 self._set_status(t["id"], "ready")
 
         running: dict[cf.Future, tuple[str, list[str], float, WorkerHandle]] = {}
-        zombies: dict[cf.Future, tuple[str, list[str]]] = {}
         spawned = 0
-        pool = cf.ThreadPoolExecutor(max_workers=self.max_parallel, thread_name_prefix="c-worker")
-        try:
-            while True:
-                tb = {t["id"]: t for t in self._backlog()}
-                # dep blocked → task phụ thuộc cũng blocked
-                for t in tb.values():
-                    if t.get("status") in DONE or t.get("status") == BLOCKED:
-                        continue
-                    bad = [d for d in t.get("deps") or [] if tb[d].get("status") == BLOCKED]
-                    if bad and t.get("status") in (None, "ready"):
-                        self._block(t["id"], f"dep blocked: {bad}")
-                tb = {t["id"]: t for t in self._backlog()}
-                busy = {tid for tid, *_ in running.values()} | {tid for tid, _ in zombies.values()}
-                ready = [t for t in tb.values()
-                         if t.get("status") in (None, "ready") and t["id"] not in busy
-                         and all(tb[d].get("status") in DONE for d in t.get("deps") or [])]
-                for t in ready:
-                    if t.get("status") is None:
-                        self._set_status(t["id"], "ready")
+        while True:
+            tb = {t["id"]: t for t in self._backlog()}
+            # dep blocked → task phụ thuộc cũng blocked
+            for t in tb.values():
+                if t.get("status") in DONE or t.get("status") == BLOCKED:
+                    continue
+                bad = [d for d in t.get("deps") or [] if tb[d].get("status") == BLOCKED]
+                if bad and t.get("status") in (None, "ready"):
+                    self._block(t["id"], f"dep blocked: {bad}")
+            tb = {t["id"]: t for t in self._backlog()}
+            zombies = live_zombies(self.scope)          # gồm cả zombie của run() trước
+            busy = {tid for tid, *_ in running.values()} | {z["task_id"] for z in zombies}
+            ready = [t for t in tb.values()
+                     if t.get("status") in (None, "ready") and t["id"] not in busy
+                     and all(tb[d].get("status") in DONE for d in t.get("deps") or [])]
+            for t in ready:
+                if t.get("status") is None:
+                    self._set_status(t["id"], "ready")
 
-                held = [o for _, o, *_ in running.values()] + [o for _, o in zombies.values()]
-                waiting_owns = []
-                for t in ready:
-                    if self.escalation:
-                        break
-                    if len(running) + len(zombies) >= self.max_parallel:
-                        break
-                    if self._over_budget():
-                        self.escalation = escalation.should_escalate(0, "", failed=False, over_budget=True)
-                        self.board.append("risk_register", {"risk": f"Dispatcher: {self.escalation}",
-                                          "severity": "High", "status": "open"}, agent=AGENT)
-                        self._event("BLOCKED", None, reason=self.escalation,
-                                    pending=[x["id"] for x in ready if x["id"] not in busy])
-                        break
-                    owns = self.owns_of(t)
-                    if any(_overlap(owns, h) for h in held):
-                        waiting_owns.append(t["id"])
-                        continue
-                    trigger = "retry-fresh" if self.attempts.get(t["id"]) else "fan-out"
-                    try:
-                        if self.repo and t["id"] not in self.worktrees:
-                            from src.tools.integrations import repo as git
-                            self.worktrees[t["id"]] = str(git.create_worktree(self.repo, t["id"]))
-                        contract = self.build_contract(t, trigger)
-                    except Exception as e:  # contract sai / git lỗi → không spawn
-                        self._block(t["id"], f"không spawn được: {e}")
-                        continue
-                    with self._lock:
-                        self.used_tokens += self.worker_tokens or 0
-                    handle = WorkerHandle(self, t["id"])
-                    self._set_status(t["id"], "in_dev")
-                    self._event("SPAWN", t["id"], trigger=trigger, owns=owns,
-                                attempt=contract["input_slice"]["attempt"], budget=contract["budget"])
-                    fut = pool.submit(self._run_worker, contract, handle)
-                    running[fut] = (t["id"], owns, time.monotonic() + self.ttl, handle)
-                    held.append(owns)
-                    busy.add(t["id"])
-                    spawned += 1
-
-                if not running:
-                    if zombies and waiting_owns:  # chỉ còn worker đã KILL giữ owns
-                        done, _ = cf.wait(list(zombies), timeout=self.kill_grace_s)
-                        if done:
-                            for f in done:
-                                zombies.pop(f)
-                            continue
-                        self.escalation = self.escalation or "worker bị KILL chưa dừng, owns còn bị giữ"
+            held = [o for _, o, *_ in running.values()] + [z["owns"] for z in zombies]
+            waiting = []                                 # chờ vì owns / chỗ bị zombie giữ
+            for t in ready:
+                if self.escalation:
                     break
+                if len(running) + len(zombies) >= self.max_parallel:
+                    waiting.append(t["id"])
+                    break
+                owns = self.owns_of(t)
+                if any(_overlap(owns, h) for h in held):
+                    waiting.append(t["id"])
+                    continue
+                trigger = "retry-fresh" if self.attempts.get(t["id"]) else "fan-out"
+                try:
+                    if self.repo and t["id"] not in self.worktrees:
+                        from src.tools.integrations import repo as git
+                        self.worktrees[t["id"]] = str(git.ensure_worktree(self.repo, t["id"]))
+                    contract = self.build_contract(t, trigger)
+                except Exception as e:  # contract sai / git lỗi → không spawn
+                    self._block(t["id"], f"không spawn được: {e}")
+                    continue
+                try:
+                    alloc = self._allocate()
+                except ledger.BudgetExceeded as e:
+                    self._over_budget([x["id"] for x in ready if x["id"] not in busy], str(e))
+                    break
+                handle = WorkerHandle(self, t["id"], WorkerBoard(self.board, self.worker_agents))
+                self._set_status(t["id"], "in_dev")
+                self._event("SPAWN", t["id"], trigger=trigger, owns=owns,
+                            attempt=contract["input_slice"]["attempt"], budget=contract["budget"])
+                fut = self._spawn(contract, handle, alloc)
+                running[fut] = (t["id"], owns, time.monotonic() + self.ttl, handle)
+                held.append(owns)
+                busy.add(t["id"])
+                spawned += 1
 
-                now = time.monotonic()
-                timeout = max(0.0, min(d for _, _, d, _ in running.values()) - now)
-                done, _ = cf.wait(list(running) + list(zombies), timeout=timeout,
-                                  return_when=cf.FIRST_COMPLETED)
-                for f in list(zombies):
-                    if f in done:
-                        zombies.pop(f)
-                for f in done:
-                    if f in running:
-                        self._on_result(f, *running.pop(f))
-                now = time.monotonic()
-                for f, (tid, owns, deadline, handle) in list(running.items()):
-                    if now >= deadline:
-                        handle.cancelled.set()
-                        running.pop(f)
-                        zombies[f] = (tid, owns)
+            if not running:
+                if zombies and waiting and not self.escalation:
+                    if self._wait_zombies(zombies):
+                        continue
+                    self.escalation = "worker bị KILL chưa dừng, owns còn bị giữ"
+                    self._event("BLOCKED", None, reason=self.escalation, pending=waiting,
+                                zombies=[z["task_id"] for z in zombies])
+                break
+
+            now = time.monotonic()
+            timeout = max(0.0, min(d for _, _, d, _ in running.values()) - now)
+            done, _ = cf.wait(list(running), timeout=timeout, return_when=cf.FIRST_COMPLETED)
+            for f in done:
+                self._on_result(f, *running.pop(f))
+            now = time.monotonic()
+            for f, (tid, owns, deadline, handle) in list(running.items()):
+                if now < deadline:
+                    continue
+                running.pop(f)
+                with self._lock:                         # cancel + block nguyên tử với report()
+                    handle.cancelled.set()
+                    zombie = self._zombify(handle, owns)
+                    if zombie:
                         self._event("KILL", tid, reason=f"quá ttl {self.ttl}s")
                         self._block(tid, "KILL: quá ttl")
-        finally:
-            pool.shutdown(wait=False, cancel_futures=True)
+                if not zombie:                           # vừa kịp xong đúng lúc hết ttl
+                    cf.wait([f])
+                    self._on_result(f, tid, owns, deadline, handle)
 
         return self._summary(spawned)
+
+    def _wait_zombies(self, zombies: list[dict]) -> bool:
+        """Chờ tối đa kill_grace_s cho một zombie dừng. True nếu có zombie đã dừng."""
+        deadline = time.monotonic() + self.kill_grace_s
+        while time.monotonic() < deadline:
+            if any(z["done"].is_set() for z in zombies):
+                return True
+            time.sleep(0.01)
+        return any(z["done"].is_set() for z in zombies)
+
+    def _over_budget(self, pending: list[str], detail: str) -> None:
+        self.escalation = escalation.should_escalate(0, "", failed=False, over_budget=True)
+        self.board.append("risk_register", {"risk": f"Dispatcher: {self.escalation}",
+                          "severity": "High", "status": "open"}, agent=AGENT)
+        self._event("BLOCKED", None, reason=self.escalation, detail=detail, pending=pending)
 
     def _on_result(self, fut: cf.Future, tid: str, owns, deadline, handle) -> None:
         try:
@@ -326,12 +466,17 @@ class Dispatcher:
             err = None if res.get("ok") else (res.get("reason") or res.get("error") or "worker fail")
         except DepthExceeded as e:
             res, err = {}, f"vi phạm depth: {e}"
+        except ledger.BudgetExceeded as e:
+            # Hết budget giữa chừng: không tính là một vòng retry; task về ready, ngừng spawn.
+            self._event("RESULT", tid, ok=False, reason=f"BudgetExceeded: {e}",
+                        attempt=self.attempts.get(tid, 0) + 1)
+            self._set_status(tid, "ready")
+            if not self.escalation:
+                self._over_budget([tid], str(e))
+            return
         except Exception as e:
             res, err = {}, f"{type(e).__name__}: {e}"
         used = res.get("tokens_used")
-        if used is not None:
-            with self._lock:
-                self.used_tokens += int(used) - (self.worker_tokens or 0)
         self.attempts[tid] = self.attempts.get(tid, 0) + 1
         self._event("RESULT", tid, ok=err is None, reason=err, attempt=self.attempts[tid],
                     tokens_used=used, qc_critical=bool(res.get("qc_critical")))
@@ -362,19 +507,22 @@ class Dispatcher:
                 "max_concurrency": self.max_concurrency, "worktrees": dict(self.worktrees)}
 
 
-def default_pipeline(board, user_id: str = "dispatcher", ctx: dict | None = None) -> Worker:
+def default_pipeline(user_id: str = "dispatcher", ctx: dict | None = None, sender=None) -> Worker:
     """Worker mặc định: c1_dev → c2_tester → c3_qc (gọi agent qua runtime/gateway).
-    Pass khi c3_qc verdict = pass. Cần API key khi chạy thật; test dùng worker mock."""
+    Pass khi c3_qc verdict = pass. Chỉ dùng board proxy của handle (không sign, không ghi zone ngoài).
+    Cần API key khi chạy thật; test dùng worker mock hoặc `sender` mock."""
     def worker(contract: dict, h: WorkerHandle) -> dict:
         from src.agents import c1_dev, c2_tester, c3_qc
+        board = h.board
         sl = contract["input_slice"]
-        c = {"project_id": getattr(board, "project_id", "p"), "risk_level": sl.get("risk_level", "normal"),
-             **(ctx or {})}
-        r1 = c1_dev.run(board, user_id, c, {"task": sl["task"], "spec": sl["spec"], "AC": sl["AC"]})
+        c = {"project_id": getattr(board, "project_id", None) or "p",
+             "risk_level": sl.get("risk_level", "normal"), **(ctx or {})}
+        kw = {"sender": sender} if sender else {}
+        r1 = c1_dev.run(board, user_id, c, {"task": sl["task"], "spec": sl["spec"], "AC": sl["AC"]}, **kw)
         if not r1.get("ok"):
             return {"ok": False, "reason": f"c1_dev: {r1.get('reason')}", "tier": r1.get("tier", "")}
         h.report("testing")
-        r2 = c2_tester.run(board, user_id, c, {"AC": sl["AC"], "pr": r1["data"]})
+        r2 = c2_tester.run(board, user_id, c, {"AC": sl["AC"], "pr": r1["data"]}, **kw)
         if not r2.get("ok"):
             return {"ok": False, "reason": f"c2_tester: {r2.get('reason')}", "tier": r2.get("tier", "")}
         h.report("qc")
@@ -383,7 +531,7 @@ def default_pipeline(board, user_id: str = "dispatcher", ctx: dict | None = None
             from src.tools.integrations import repo as git
             pr_diff = git.diff(sl["worktree"])
         r3 = c3_qc.run(board, user_id, c, {"pr_diff": pr_diff or json.dumps(r1["data"], ensure_ascii=False),
-                                           "spec": sl["spec"], "AC": sl["AC"]})
+                                           "spec": sl["spec"], "AC": sl["AC"]}, **kw)
         if not r3.get("ok"):
             return {"ok": False, "reason": f"c3_qc: {r3.get('reason')}", "tier": r3.get("tier", "")}
         crit = any(i.get("severity") == "Critical" for i in r3["data"].get("issues", []))

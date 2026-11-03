@@ -11,3 +11,10 @@ dispatcher:
   max_parallel: 3          # số worker BUILD chạy đồng thời tối đa
   worker_tokens: null      # budget token mỗi worker, trừ từ per_project_tokens.build
   worker_ttl_s: 1800       # quá hạn → KILL + task BLOCKED
+  kill_grace_s: 5          # chờ worker đã KILL nhả owns trước khi escalate
+# H1 Agent Factory: budget mặc định ghi vào card agent mới (người sửa được trong spec sinh ra).
+factory:
+  default_agent_budget:
+    tokens_per_call: 8000
+    timeout_s: 60
+    max_retries: 2

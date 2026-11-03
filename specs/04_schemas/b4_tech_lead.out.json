@@ -66,6 +66,15 @@
               "normal",
               "high"
             ]
+          },
+          "owns": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "File/thư mục/glob task được sửa (vd. src/auth/, src/api/login.py). Task song song không giao nhau, giao thì phải có deps. Thiếu → Dispatcher coi là [\"*\"] (độc quyền)."
           }
         },
         "required": [

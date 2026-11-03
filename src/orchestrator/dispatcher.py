@@ -24,7 +24,9 @@ CODE thuần, không LLM quyết thứ tự hay số worker:
 from __future__ import annotations
 
 import concurrent.futures as cf
+import fnmatch
 import json
+import re
 import threading
 import time
 from pathlib import Path
@@ -132,19 +134,65 @@ def check_dag(tasks: list[dict]) -> list[str]:
     return order
 
 
+_GLOB = re.compile(r"[*?\[]")
+
+
+def _norm(p: str) -> str:
+    p = p.strip()
+    while p.startswith("./"):
+        p = p[2:]
+    return p
+
+
+def _path_overlap(x: str, y: str) -> bool:
+    x, y = _norm(x), _norm(y)
+    gx, gy = _GLOB.search(x), _GLOB.search(y)
+    if gx or gy:
+        # glob: thận trọng — so phần tĩnh trước ký tự glob đầu tiên (có thể báo giao thừa, không sót)
+        if (gx and fnmatch.fnmatchcase(y, x)) or (gy and fnmatch.fnmatchcase(x, y)):
+            return True
+        px = x[:gx.start()] if gx else x
+        py = y[:gy.start()] if gy else y
+        return px.startswith(py) or py.startswith(px)
+    return x == y or x.startswith(y.rstrip("/") + "/") or y.startswith(x.rstrip("/") + "/")
+
+
 def _overlap(a: list[str], b: list[str]) -> bool:
     if EXCLUSIVE in a or EXCLUSIVE in b:
         return True
-    for x in a:
-        for y in b:
-            if x == y or x.startswith(y.rstrip("/") + "/") or y.startswith(x.rstrip("/") + "/"):
-                return True
-    return False
+    return any(_path_overlap(x, y) for x in a for y in b)
 
 
 def default_owns(task: dict) -> list[str]:
-    """B4 chưa khai owns trong schema → mặc định độc quyền (an toàn, chạy tuần tự)."""
+    """`owns` từ task_backlog (field của B4, specs/04_schemas/b4_tech_lead.out.json).
+    Thiếu/rỗng → ["*"] = độc quyền (an toàn, chạy tuần tự)."""
     return list(task.get("owns") or [EXCLUSIVE])
+
+
+def owns_conflicts(tasks: list[dict]) -> list[tuple[str, str]]:
+    """Cặp task có thể chạy song song (không task nào là tổ tiên của task kia) mà owns giao nhau.
+    Kiểm Done-when của B4 bằng Code; task thiếu owns bị bỏ qua (Dispatcher đã chạy tuần tự)."""
+    check_dag(tasks)
+    deps = {t["id"]: set(t.get("deps") or []) for t in tasks}
+    anc: dict[str, set[str]] = {}
+
+    def ancestors(i):
+        if i not in anc:
+            anc[i] = set()
+            for d in deps[i]:
+                anc[i] |= {d} | ancestors(d)
+        return anc[i]
+
+    out = []
+    for i, a in enumerate(tasks):
+        for b in tasks[i + 1:]:
+            if not a.get("owns") or not b.get("owns"):
+                continue
+            if a["id"] in ancestors(b["id"]) or b["id"] in ancestors(a["id"]):
+                continue
+            if _overlap(a["owns"], b["owns"]):
+                out.append((a["id"], b["id"]))
+    return out
 
 
 def worker_agents() -> list[str]:

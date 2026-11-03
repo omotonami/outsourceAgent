@@ -10,7 +10,9 @@ Không LLM nào chọn thứ tự hay số worker.
 - **Spawn Contract**: mỗi worker nhận contract hợp lệ theo `specs/04_schemas/spawn_contract.json`
   (`trigger`: `fan-out` lần đầu, `retry-fresh` khi chạy lại).
 - **owns**: owns của các worker đang chạy không giao nhau (so cả tiền tố thư mục); giao → task chờ.
-  B4 chưa có field `owns` → mặc định `["*"]` = độc quyền → chạy tuần tự. Truyền `owns_of=` để song song.
+  `owns` (path/glob) là field của `task_backlog` trong output B4 (`specs/04_schemas/b4_tech_lead.out.json`);
+  Dispatcher đọc thẳng từ task. Thiếu → `["*"]` = độc quyền → chạy tuần tự. Glob so thận trọng (phần tĩnh).
+  `owns_conflicts(tasks)` kiểm Done-when của B4: cặp task song song có owns giao nhau.
 - **Budget**: mỗi spawn trừ `worker_tokens` khỏi `per_project_tokens.build`; báo `tokens_used` thì trừ theo thực tế.
   Hết budget → ngừng spawn, `escalation.should_escalate(over_budget=True)`, ghi `risk_register`.
 - **Substate** (zone `task_backlog`, writer `orchestrator`): `ready → in_dev → testing → qc → await_merge`.

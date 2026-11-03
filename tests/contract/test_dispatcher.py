@@ -472,3 +472,43 @@ def test_base_for_deps_unit(tmp_path):
         git.base_for_deps(r, "X", ["NOPE"])
     git.create_worktree(r, "D1")
     assert git.base_for_deps(r, "X", ["D1"]) == "task/D1"
+
+
+# ================= Quyết định 2026-11-03 (b): owns trong output B4 =================
+def test_b4_schema_has_owns_and_dispatcher_reads_it():
+    import json as _j
+    from jsonschema import ValidationError
+    sch = _j.loads((dsp.ROOT / "specs/04_schemas/b4_tech_lead.out.json").read_text(encoding="utf-8"))
+    out = {"architecture": {}, "task_backlog": [
+        {"id": "T1", "spec": "x", "risk_level": "normal", "owns": ["src/auth/"]},
+        {"id": "T2", "spec": "y", "risk_level": "normal", "owns": ["src/api/*.py"]},
+        {"id": "T3", "spec": "z", "risk_level": "normal"}]}
+    validate(out, sch)
+    for bad in ([], [1], [""], "src/"):
+        o = _j.loads(_j.dumps(out))
+        o["task_backlog"][0]["owns"] = bad
+        with pytest.raises(ValidationError):
+            validate(o, sch)
+    tb = out["task_backlog"]
+    assert dsp.default_owns(tb[0]) == ["src/auth/"] and dsp.default_owns(tb[2]) == ["*"]
+    spec = (dsp.ROOT / "specs/02_agents/b4_tech_lead.md").read_text(encoding="utf-8")
+    assert "risk_level, owns[]}]" in spec and "owns của các task song song không giao nhau" in spec
+
+
+def test_dispatcher_parallel_by_b4_owns_without_owns_of():
+    b = _board([_t("T1", owns=["src/a/"]), _t("T2", owns=["src/b/"]), _t("T3", owns=["src/a/x.py"])])
+    w = Recorder(sleep=0.1)
+    res = Dispatcher(b, w, max_parallel=3).run()
+    assert sorted(res["done"]) == ["T1", "T2", "T3"]
+    s = {k: v[0] for k, v in w.spans.items()}
+    assert s["T1"][0] < s["T2"][1] and s["T2"][0] < s["T1"][1]          # T1 ∥ T2
+    assert s["T3"][0] >= s["T1"][1] or s["T1"][0] >= s["T3"][1]          # T1, T3 giao → tuần tự
+
+
+def test_owns_overlap_globs_and_conflict_check():
+    ov = dsp._overlap
+    assert ov(["src/api/*.py"], ["src/api/login.py"]) and ov(["src/**"], ["src/x/y"])
+    assert not ov(["src/api/*.py"], ["src/web/a.ts"]) and not ov(["./a/"], ["b/"])
+    tasks = [_t("T1", owns=["src/a/"]), _t("T2", owns=["src/a/x.py"]),
+             _t("T3", ["T1"], ["src/a/"]), _t("T4", owns=["src/b/"])]
+    assert dsp.owns_conflicts(tasks) == [("T1", "T2"), ("T2", "T3")]

@@ -33,7 +33,7 @@ subordinates: [c1_dev, c2_tester, c3_qc]
 | Trigger | requirements + screens đủ cho một release slice |
 | Tools | repo_read, dependency_graph, cloud_cost_calc |
 | Input | ``{stories[], screens[], nfr[], tech_constraints, client_infra}`` |
-| Output | ``{architecture, adr[], task_backlog[{id, story_ref, spec, AC, deps[], size, risk_level}]}`` |
+| Output | ``{architecture, adr[], task_backlog[{id, story_ref, spec, AC, deps[], size, risk_level, owns[]}]}`` |
 | Subordinates | c1_dev, c2_tester, c3_qc |
 
 ## Agent Card v5 (trường bổ sung)
@@ -54,6 +54,7 @@ subordinates: [c1_dev, c2_tester, c3_qc]
 - dependency_graph không vòng
 - Mọi story có task
 - Task có risk_level
+- owns của các task song song không giao nhau, hoặc giữa chúng có deps
 
 ## Prompt (framework 4 module)
 
@@ -74,7 +75,9 @@ Validate the input. If invalid, return:
 <!-- Admin điền các step cụ thể cho agent này. Giữ đánh số. -->
 1. Từ stories + screens + nfr đề xuất architecture {components, data_flow, deployment}.
 2. Mỗi quyết định công nghệ ghi 1 ADR {decision, options_rejected, reason}.
-3. Chia task_backlog {id, story_ref, spec, AC, deps, size, risk_level}.
+3. Chia task_backlog {id, story_ref, spec, AC, deps, size, risk_level, owns}. `owns` = danh sách path/glob
+   (file hoặc thư mục) task được sửa. Hai task không phụ thuộc nhau (chạy song song) thì owns KHÔNG giao nhau;
+   cần sửa chung file → thêm deps để chạy tuần tự.
 4. Gắn risk_level cho mỗi task để routing model.
 5. Reflection: dependency không vòng; mọi story có task; công nghệ ngoài ràng buộc đều có ADR.
 
@@ -89,6 +92,6 @@ failure in `reflection.issues`.
 
 ### MODULE 4: OUTPUT CONTRACT
 Return ONLY a JSON object conforming to the schema in `specs/04_schemas/b4_tech_lead.out.json`
-(summary: ``{architecture, adr[], task_backlog[{id, story_ref, spec, AC, deps[], size, risk_level}]}``).
+(summary: ``{architecture, adr[], task_backlog[{id, story_ref, spec, AC, deps[], size, risk_level, owns[]}]}``).
 Do NOT return free-form text.
 Do NOT include explanations outside the JSON.

@@ -243,3 +243,32 @@ def test_server_gate_reject_records_nothing(tmp_path, monkeypatch):
     assert not (tmp_path / "reviews.jsonl").exists() and app.S.board._signatures == {}
     app.S.reset(True)
 
+
+# ---------- Quyết định 2026-11-03 (f): gate_feedback có task_type → hạ đúng cặp ----------
+def test_gate_feedback_task_type_demotes_only_that_pair(tmp_path):
+    ax = _ax(tmp_path)
+    other = "hotfix"
+    for tt in (TT, other):                                       # đưa cả 2 cặp lên L1
+        _approve(ax, N1, tt=tt)
+        ax.evaluate()
+        ax.promote(A, tt, approved_by="lan")
+    gate_feedback.record_edit("G3", A, "dev", "f", "a", "b", "lan", "u1",
+                              base_log=tmp_path / "gate_feedback.jsonl", task_type=other)
+    entry = json.loads((tmp_path / "gate_feedback.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert entry["task_type"] == other
+    res = ax.evaluate()
+    assert [(d["task_type"], d["to"]) for d in res["demotions"]] == [(other, "L0")]
+    assert ax.level(A, TT) == "L1" and ax.level(A, other) == "L0"
+
+
+def test_gate_feedback_without_task_type_stays_conservative(tmp_path):
+    ax = _ax(tmp_path)
+    for tt in (TT, "hotfix"):
+        _approve(ax, N1, tt=tt)
+        ax.evaluate()
+        ax.promote(A, tt, approved_by="lan")
+    gate_feedback.record_edit("G3", A, "dev", "f", "a", "b", "lan", "u1",
+                              base_log=tmp_path / "gate_feedback.jsonl")
+    assert "task_type" not in json.loads((tmp_path / "gate_feedback.jsonl").read_text(encoding="utf-8"))
+    ax.evaluate()
+    assert ax.level(A, TT) == "L0" and ax.level(A, "hotfix") == "L0"

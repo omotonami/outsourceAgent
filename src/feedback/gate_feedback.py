@@ -11,12 +11,16 @@ KN = ROOT / "knowledge"
 
 
 def record_edit(gate, agent, role, field, before, after, reviewer, user_id,
-                board=None, base_log=None):
+                board=None, base_log=None, task_type=None):
+    """task_type (tuỳ chọn): loại việc của output bị sửa. Có → Autonomy chỉ hạ đúng cặp (agent, task_type);
+    không có → hạ mọi task_type của agent (thận trọng, hành vi cũ)."""
     log = Path(base_log) if base_log else LOG
     log.parent.mkdir(parents=True, exist_ok=True)
     entry = {"ts": time.time(), "at": datetime.datetime.now().isoformat(timespec="seconds"),
              "gate": gate, "agent": agent, "role": role, "field": field,
              "before": before, "after": after, "reviewer": reviewer, "user_id": user_id}
+    if task_type:
+        entry["task_type"] = str(task_type)
     with log.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     if board is not None:

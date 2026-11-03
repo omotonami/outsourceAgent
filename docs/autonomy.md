@@ -15,6 +15,8 @@ Mọi số ở `config/autonomy.yaml` (ngưỡng, số mức hạ, trigger, cặ
 - State: `eval/runs/autonomy_state.json` (inject `state_path` cho test). Không có cặp = L0.
 - `record_review(agent, task_type, gate, reviewer, edited=False)` — ghi `eval/runs/autonomy_reviews.jsonl`
   khi người duyệt ở gate. Chỉ ghi log, **không ký gate**.
+- `gate_feedback.record_edit(..., task_type=...)` ghi `task_type` → gate edit chỉ hạ đúng cặp
+  `(agent, task_type)`; thiếu `task_type` → hạ mọi task_type của agent (thận trọng, như cũ).
 - `evaluate(board, eval_results)` đọc reviews + `gate_feedback.jsonl` + `revision_log` (kind=edit) +
   regression (`eval/runs/eval_regression.jsonl` hoặc tham số):
   - **Nâng = đề xuất**: đủ `promote.consecutive_approvals.L<n>` lần duyệt liên tiếp không sửa kể từ lần

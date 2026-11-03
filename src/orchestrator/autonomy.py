@@ -67,7 +67,8 @@ def _read_jsonl(path: Path | None) -> list[dict]:
 
 
 def _match(entry: dict, agent: str, task_type: str) -> bool:
-    """Entry khớp cặp: cùng agent; nếu entry có task_type thì phải trùng (không có = áp cả agent)."""
+    """Entry khớp cặp: cùng agent; nếu entry có task_type thì phải trùng (không có = áp cả agent —
+    thận trọng: gate_feedback cũ / revision_log không ghi task_type thì hạ mọi task_type của agent)."""
     if entry.get("agent") != agent:
         return False
     tt = entry.get("task_type")

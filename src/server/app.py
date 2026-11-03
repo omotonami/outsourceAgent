@@ -14,6 +14,7 @@ from src.store import historical
 from src.agents.a2_estimation import enrich
 from src.iso import impact, conformance, inventory
 from src.orchestrator import status as pstatus
+from src.orchestrator import gate_view
 from src.agents import e1_pm
 
 HERE = Path(__file__).parent
@@ -99,7 +100,8 @@ def _estimate_payload():
 def _do_step():
     if S.i >= len(S.steps): return {"status":"done"}
     st = S.steps[S.i]
-    if st.get("gate"): return {"status":"gate", "gate":st}
+    if st.get("gate"):  # H3: kèm decision_records (không transcript) cho G1/G2
+        return {"status":"gate", "gate":st, "decision_records":gate_view.decision_records(S.board, st["gate"])}
     # ghi Blackboard thật, đúng agent-writer của từng vùng (nếu sai, Blackboard sẽ chặn)
     ZW = {"lead_brief":"intake","business_context":"a1_bu","estimate":"a2_estimation",
           "proposal":"a3_proposal","requirements":"b1_ba","design_spec":"b2_ux","ui_system":"b3_ui",
@@ -131,7 +133,9 @@ def state():
                        budget_ratio=min(0.99, S.total if False else 0))
     except Exception: pass
     est = S.board.get("estimate")
+    cur = S.steps[S.i] if S.i < len(S.steps) else {}
     return {
+      "gate_decisions": (gate_view.decision_records(S.board, cur["gate"]) if cur.get("gate") else []),
       "i": S.i, "steps": S.steps, "zones": S.zones(), "signed": S.signed,
       "log": S.log, "total_cost": round(sum(e["cost"] for e in S.log),6),
       "total_tok": sum(e["tok"][0]+e["tok"][1] for e in S.log),
@@ -154,6 +158,11 @@ def gate(decision: str):
         back = next((j for j,s in enumerate(S.steps) if s["phase"]==st["phase"] and not s.get("gate")), 0)
         S.signed.pop(gid, None); S.i = back
     return state()
+
+@app.get("/api/gate/{gid}/decisions")
+def gate_decisions(gid: str):
+    """H3: decision_record của huddle cho gate (G1 presales, G2 discovery). Không có transcript."""
+    return {"gate": gid, "decision_records": gate_view.decision_records(S.board, gid)}
 
 @app.post("/api/reset")
 def reset(dev_high: bool = True):

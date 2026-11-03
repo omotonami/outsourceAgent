@@ -18,3 +18,12 @@ factory:
     tokens_per_call: 8000
     timeout_s: 60
     max_retries: 2
+# H3 Huddle (đề án 0002). Code đọc; LLM không chọn số vòng, không quyết có huddle hay không.
+huddle:
+  max_rounds: 3            # mỗi vòng: Proposer → Critic; Decider chốt ở vòng hội tụ hoặc vòng cuối
+  tokens: 20000            # budget token RIÊNG cho 1 huddle; vượt → dừng, decision_record chosen=null
+  decider_retries: 1       # Decider fail schema → retry 1 lần → escalate
+  presales_ambiguity_threshold: 3   # business_context.ambiguities ≥ ngưỡng → huddle PRESALES
+  roles:                   # Proposer/Decider = agent chủ phase, Critic = agent phase kề
+    presales:  {proposer: a1_bu, critic: a2_estimation, decider: a1_bu}
+    discovery: {proposer: b1_ba, critic: b2_ux, decider: b1_ba}

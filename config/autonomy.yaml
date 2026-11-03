@@ -1,0 +1,44 @@
+# H4 Autonomy Ladder (đề án 0002). Code đọc (src/orchestrator/autonomy.py); LLM không đổi mức.
+# Mức theo cặp (agent_id, task_type). Agent mới / chưa có dữ liệu = L0.
+# L3 Auto-gate: BẢO LƯU theo quyết định chủ repo — không định nghĩa, code từ chối mọi mức > L2.
+max_level: L2
+
+levels:
+  L0:
+    name: Manual
+    meaning: "Người kích hoạt từng lần"
+    allowed_triggers: [manual]
+    review: every_output        # người duyệt mọi output
+    uses_promoted_skills: false
+  L1:
+    name: Skill
+    meaning: "Chạy theo skill đã promote khi người kích hoạt, người duyệt mọi output"
+    allowed_triggers: [manual]
+    review: every_output
+    uses_promoted_skills: true
+  L2:
+    name: Routine
+    meaning: "Tự chạy theo trigger (routine), người duyệt ở gate như cũ"
+    allowed_triggers: [manual, routine, schedule, event]
+    review: gate
+    uses_promoted_skills: true
+
+promote:
+  # Số lần gate liên tiếp duyệt KHÔNG sửa (kể từ lần đổi mức gần nhất) để ĐỀ XUẤT lên mức đích.
+  # Đề xuất chỉ có hiệu lực khi người xác nhận: promote(..., approved_by=<người>).
+  consecutive_approvals:
+    L1: 5
+    L2: 10
+  # Tên không được coi là người duyệt (bot / tự động).
+  reject_approvers: [auto, auto-L3, orchestrator, orchestrator.dispatcher, dispatcher, gate_ui, huddle]
+
+demote:
+  on_revision: 1        # revision_log kind=edit → hạ N mức, tự động, ngay
+  on_gate_edit: 1       # gate_feedback (người sửa ở gate) → hạ N mức; 0 = chỉ reset chuỗi duyệt
+  on_regression: 1      # eval regression → hạ N mức
+  on_incident: L0       # incident → về thẳng mức này
+  risk_severity: Medium # severity ghi risk_register khi hạ
+
+# Cặp/agent ghim cứng, không bao giờ nâng (spec e1_pm: autonomy cố định).
+pinned:
+  e1_pm: L0

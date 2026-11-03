@@ -16,6 +16,8 @@ CODE thuần, không LLM quyết thứ tự hay số worker:
 - Worker nhận board proxy (WorkerBoard): chỉ đọc + ghi đúng zone của agent con; không có sign/revoke.
 - Số (max_parallel, ttl, kill_grace, worker_tokens) đọc từ config/budgets.yaml; thiếu → ConfigError.
 - Sự kiện SPAWN / RESULT / BLOCKED / KILL ghi append-only vào zone `trace_log`.
+- H4 Autonomy: trước khi spawn hỏi `autonomy.can_run(agent, task_type, trigger)`. Không được phép →
+  task GIỮ `ready` + sự kiện BLOCKED reason="autonomy". `trigger` mặc định "manual" (người gọi run()).
 """
 from __future__ import annotations
 
@@ -206,7 +208,7 @@ class Dispatcher:
                  worker_tokens: int | None = ..., ttl: float | None = None,
                  owns_of: Callable[[dict], list[str]] = default_owns,
                  repo: str | Path | None = None, output_schema: str = "specs/04_schemas/c3_qc.out.json",
-                 kill_grace_s: float | None = None):
+                 kill_grace_s: float | None = None, trigger: str = "manual", autonomy=None):
         _check_depth("tạo")
         self.board = board
         self.project_id = getattr(board, "project_id", None) or "p"
@@ -220,6 +222,12 @@ class Dispatcher:
         self.ttl = float(_cfg("worker_ttl_s") if ttl is None else ttl)
         self.kill_grace_s = float(_cfg("kill_grace_s") if kill_grace_s is None else kill_grace_s)
         self.owns_of, self.repo, self.output_schema = owns_of, repo, output_schema
+        self.trigger = trigger
+        if autonomy is None:
+            from .autonomy import Autonomy
+            autonomy = Autonomy()
+        self.autonomy = autonomy
+        self.autonomy_denied: dict[str, str] = {}
         self._lock = threading.RLock()
         self._used_start = ledger.used(self.project_id, PHASE)
         self.escalation: str | None = None
@@ -386,6 +394,15 @@ class Dispatcher:
                 if len(running) + len(zombies) >= self.max_parallel:
                     waiting.append(t["id"])
                     break
+                if t["id"] in self.autonomy_denied:
+                    continue
+                gate = self.autonomy.can_run(t.get("agent") or "c1_dev", t.get("type") or "build_task",
+                                             self.trigger)
+                if not gate["allowed"]:  # giữ ready, chỉ báo BLOCKED một lần mỗi run
+                    self.autonomy_denied[t["id"]] = gate["reason"]
+                    self._event("BLOCKED", t["id"], reason="autonomy", detail=gate["reason"],
+                                level=gate["level"], trigger=self.trigger)
+                    continue
                 owns = self.owns_of(t)
                 if any(_overlap(owns, h) for h in held):
                     waiting.append(t["id"])
@@ -504,7 +521,8 @@ class Dispatcher:
         return {"spawned": spawned, "done": done, "blocked": blocked,
                 "pending": [t["id"] for t in tb if t["id"] not in done and t["id"] not in blocked],
                 "escalation": self.escalation, "used_tokens": self.used_tokens,
-                "max_concurrency": self.max_concurrency, "worktrees": dict(self.worktrees)}
+                "max_concurrency": self.max_concurrency, "worktrees": dict(self.worktrees),
+                "autonomy_denied": dict(self.autonomy_denied)}
 
 
 def default_pipeline(user_id: str = "dispatcher", ctx: dict | None = None, sender=None) -> Worker:

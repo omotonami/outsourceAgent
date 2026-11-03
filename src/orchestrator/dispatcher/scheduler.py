@@ -86,8 +86,8 @@ class Scheduler:
                 break
             if t["id"] in self.autonomy_denied:
                 continue
-            gate = self.autonomy.can_run(t.get("agent") or DEFAULT_AGENT, t.get("type") or DEFAULT_TASK_TYPE,
-                                         self.trigger)
+            agent, task_type = t.get("agent") or DEFAULT_AGENT, t.get("type") or DEFAULT_TASK_TYPE
+            gate = self.autonomy.can_run(agent, task_type, self.trigger)
             if not gate["allowed"]:  # giữ ready, chỉ báo BLOCKED một lần mỗi run
                 self.autonomy_denied[t["id"]] = gate["reason"]
                 self._event("BLOCKED", t["id"], reason="autonomy", detail=gate["reason"],
@@ -115,6 +115,7 @@ class Scheduler:
                 break
             handle = WorkerHandle(self, t["id"], WorkerBoard(self.board, self.worker_agents))
             self._set_status(t["id"], "in_dev")
+            self._event("ASSIGN", t["id"], agent=agent, task_type=task_type, trigger=trigger)
             self._event("SPAWN", t["id"], trigger=trigger, owns=owns,
                         attempt=contract["input_slice"]["attempt"], budget=contract["budget"])
             fut = self._spawn(contract, handle, alloc)

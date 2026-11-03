@@ -85,7 +85,7 @@ class Dispatcher(Scheduler):
 
     def _event(self, kind: str, task_id: str | None, **fields) -> None:
         with self._lock:
-            events.emit(self.board, kind, agent=AGENT, by=PARENT, task_id=task_id, **fields)
+            events.emit(self.board, kind, writer=AGENT, by=PARENT, task_id=task_id, **fields)
 
     def _block(self, task_id: str, reason: str) -> None:
         self._set_status(task_id, BLOCKED, blocked_reason=reason)

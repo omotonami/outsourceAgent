@@ -29,11 +29,12 @@ SOURCE_TYPES = {"huddle_log": EventType.RESULT, "decision_records": EventType.DE
                 "risk_register": EventType.BLOCKED}
 
 
-def emit(board, kind: EventType | str, *, agent: str, by: str, task_id: str | None = None,
+def emit(board, kind: EventType | str, *, writer: str, by: str, task_id: str | None = None,
          clock: Callable[[], float] = time.time, **fields) -> dict:
-    """Append một sự kiện vào trace_log. `kind` ngoài EventType → ValueError."""
+    """Append một sự kiện vào trace_log với danh tính `writer`. `kind` ngoài EventType → ValueError.
+    `fields` là dữ liệu sự kiện (vd ASSIGN có `agent` = agent được giao, Team feed hiển thị)."""
     entry = {"event": EventType(kind).value, "task_id": task_id, "ts": clock(), "by": by, **fields}
-    board.append(TRACE_ZONE, entry, agent=agent)
+    board.append(TRACE_ZONE, entry, agent=writer)
     return entry
 
 

@@ -15,7 +15,8 @@ CODE thuần, không LLM quyết thứ tự hay số worker:
   thread thật sự dừng. Thread worker là daemon → không treo lúc thoát.
 - Worker nhận board proxy (WorkerBoard, src/blackboard/proxy.py): chỉ đọc + ghi đúng zone của agent con.
 - Số (max_parallel, ttl, kill_grace, worker_tokens) đọc từ config/budgets.yaml; thiếu → ConfigError.
-- Sự kiện SPAWN / RESULT / BLOCKED / KILL ghi append-only vào zone `trace_log` (events.emit).
+- Sự kiện ASSIGN (giao task cho agent) / SPAWN / RESULT / BLOCKED / KILL ghi append-only vào zone
+  `trace_log` (events.emit). ASSIGN ngay trước SPAWN, mỗi lần giao (kể cả retry).
 - Git (khi có `repo`, gitops.py): worktree task con tạo từ nhánh task/<dep>; nhiều dep → nhánh tích hợp
   tạm integ/<id> (xung đột merge → task blocked). Task xong được commit cục bộ trên task/<id>.
 - H4 Autonomy: trước khi spawn hỏi `autonomy.can_run(agent, task_type, trigger)`. Không được phép →

@@ -12,15 +12,15 @@ def test_types_order_matches_team_feed():
 
 def test_emit_shape_and_writer():
     b = Blackboard("p-ev")
-    e = events.emit(b, events.EventType.ASSIGN, agent="orchestrator", by="orchestrator.dispatcher",
-                    task_id="T1", clock=lambda: 1.0, agent_id="c1_dev")
+    e = events.emit(b, events.EventType.ASSIGN, writer="orchestrator", by="orchestrator.dispatcher",
+                    task_id="T1", clock=lambda: 1.0, agent="c1_dev")
     assert e == {"event": "ASSIGN", "task_id": "T1", "ts": 1.0, "by": "orchestrator.dispatcher",
-                 "agent_id": "c1_dev"}
+                 "agent": "c1_dev"}
     assert b.get("trace_log")[0]["source_agent"] == "orchestrator"
     with pytest.raises(ValueError):
-        events.emit(b, "NOPE", agent="orchestrator", by="x")
+        events.emit(b, "NOPE", writer="orchestrator", by="x")
     with pytest.raises(PermissionDenied):                      # Blackboard vẫn quyết writer
-        events.emit(b, "SPAWN", agent="c1_dev", by="x")
+        events.emit(b, "SPAWN", writer="c1_dev", by="x")
 
 
 def test_record_only_allowed_zones():

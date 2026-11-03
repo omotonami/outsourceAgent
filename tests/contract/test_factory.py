@@ -193,7 +193,35 @@ def _test_only_mentioned(r):
     (r / "tests/contract/test_other.py").write_text("# nhắc x9_demo nhưng không phải contract test\n")
 
 
+def _test_empty(r):
+    (r / "tests/contract/test_x9_demo.py").write_text("", encoding="utf-8")
+
+
+def _test_no_test_fn(r):
+    (r / "tests/contract/test_x9_demo.py").write_text(
+        "from src.agents import x9_demo\n\ndef helper():\n    assert x9_demo\n", encoding="utf-8")
+
+
+def _test_no_import(r):
+    (r / "tests/contract/test_x9_demo.py").write_text(
+        "# x9_demo\nimport src.agents.x9_demox\n\ndef test_x():\n    assert True\n", encoding="utf-8")
+
+
+def _test_syntax_error(r):
+    (r / "tests/contract/test_x9_demo.py").write_text("def test_x(:\n", encoding="utf-8")
+
+
+def _test_only_string_mentions(r):
+    (r / "tests/contract/test_x9_demo.py").write_text(
+        '"""from src.agents import x9_demo"""\ndef test_x():\n    assert "src.agents.x9_demo"\n', encoding="utf-8")
+
+
 @pytest.mark.parametrize("breaker, code", [
+    (_test_empty, "TEST"),
+    (_test_no_test_fn, "TEST"),
+    (_test_no_import, "TEST"),
+    (_test_syntax_error, "TEST"),
+    (_test_only_string_mentions, "TEST"),
     (_copy_routing, "SOURCE"),
     (_copy_zones, "SOURCE"),
     (_runtime_reads_other, "SOURCE"),
@@ -374,3 +402,15 @@ def test_factory_interviewer_rejects_injected_output_keys():
     bad = lambda model, system, messages, max_tokens: (json.dumps({**ANSWERS, "steps": ["x"]}), {"total_tokens": 5})
     with pytest.raises(ValueError, match="SCHEMA_FAIL"):
         interview.draft_from_llm("x", sender=bad)
+
+
+@pytest.mark.parametrize("src", [
+    "from src.agents import x9_demo\ndef test_a():\n    pass\n",
+    "from src.agents import clarify, x9_demo as d\nclass TestX:\n    def test_a(self):\n        pass\n",
+    "import src.agents.x9_demo\nasync def test_a():\n    pass\n",
+    "from src.agents.x9_demo import run\ndef test_a():\n    pass\n",
+    "def test_a():\n    from src.agents import x9_demo\n",
+])
+def test_lint_accepts_valid_test_forms(repo, src):
+    (repo / "tests/contract/test_x9_demo.py").write_text(src, encoding="utf-8")
+    assert not any("[TEST]" in e for e in agent_lint.lint("x9_demo", repo))

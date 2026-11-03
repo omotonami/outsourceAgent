@@ -5,6 +5,7 @@ CLI:  python -m src.factory.agent_lint <agent_id> [--root DIR]
 Exit 0 nếu không lỗi (ngoài allowlist), 1 nếu có lỗi.
 """
 import argparse
+import ast
 import json
 import re
 import sys
@@ -188,9 +189,39 @@ def lint_raw(agent_id, root=ROOT):
     # 8. Runner + test
     if not (root / f"src/agents/{agent_id}.py").exists():
         add("RUNNER", f"thiếu src/agents/{agent_id}.py")
-    if not (root / f"tests/contract/test_{agent_id}.py").is_file():
+    tp = root / f"tests/contract/test_{agent_id}.py"
+    if not tp.is_file():
         add("TEST", f"thiếu tests/contract/test_{agent_id}.py")
+    else:
+        for m in _test_file_problems(tp, agent_id):
+            add("TEST", f"tests/contract/test_{agent_id}.py: {m}")
     return errs
+
+
+def _imports_agent(node, agent_id):
+    mod = f"src.agents.{agent_id}"
+    if isinstance(node, ast.Import):
+        return any(a.name == mod or a.name.startswith(mod + ".") for a in node.names)
+    if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+        if node.module == mod or node.module.startswith(mod + "."):
+            return True
+        return node.module == "src.agents" and any(a.name == agent_id for a in node.names)
+    return False
+
+
+def _test_file_problems(path, agent_id):
+    """Kiểm bằng AST (không chạy file): có ≥1 hàm test_* và có import src.agents.<id>."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (SyntaxError, ValueError, UnicodeDecodeError) as e:
+        return [f"không parse được ({type(e).__name__})"]
+    out = []
+    fns = (ast.FunctionDef, ast.AsyncFunctionDef)
+    if not any(isinstance(n, fns) and n.name.startswith("test_") for n in ast.walk(tree)):
+        out.append("không có hàm test_* nào")
+    if not any(_imports_agent(n, agent_id) for n in ast.walk(tree)):
+        out.append(f"không import src.agents.{agent_id}")
+    return out
 
 
 def lint(agent_id, root=ROOT, allowlist=None):

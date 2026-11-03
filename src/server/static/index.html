@@ -28,9 +28,17 @@ code{background:var(--paper);border:1px solid var(--line);border-radius:5px;padd
 .step.now{border-left-color:var(--ink);color:var(--ink);font-weight:700}
 .step.done{border-left-color:var(--ok);color:var(--ink)}
 .surf{background:var(--assumeBg);border-radius:8px;padding:8px 12px;margin:8px 0;font-size:13px}
+.tabs{display:flex;gap:6px;margin-bottom:12px}.tabs button{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.tabs button.on{background:var(--ink);color:#fff}
+.ev{display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+.ev .t{flex:none;width:74px;font-size:10.5px;font-weight:700;text-align:center;padding:2px 0;border-radius:4px;color:#fff}
+.ev .who{color:var(--muted);font-size:11.5px}.tree ul{margin:2px 0;padding-left:16px}.tree li{font-size:12.5px;margin:2px 0}
+@media(max-width:760px){.grid{grid-template-columns:1fr}.zones{grid-template-columns:repeat(2,1fr)}.wrap{padding:12px}}
 </style></head><body><div class="wrap">
 <div class="sub">Outsourcing delivery · SG · engine Python thật</div>
 <h1>Pipeline 4 phase — dashboard</h1>
+<div class="tabs"><button class="on" id="tabP">Pipeline</button><button id="tabF">Team feed</button></div>
+<div id="paneP">
 <div class="controls">
   <button id="play">▶ Chạy</button>
   <button class="ghost" id="stepBtn">Từng bước ›</button>
@@ -57,6 +65,15 @@ code{background:var(--paper);border:1px solid var(--line);border-radius:5px;padd
   </div>
 </div>
 <p style="font-size:11.5px;color:var(--muted);margin-top:18px">Blackboard, routing, token là số thật từ engine Python. Mock mặc định; đặt LIVE=1 để gọi model thật.</p>
+</div>
+<div id="paneF" style="display:none">
+  <div class="card" style="margin-bottom:14px"><div style="font-size:13px;font-weight:700;margin-bottom:6px">Cây spawn</div><div class="tree" id="tree"></div></div>
+  <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+    <b style="font-size:13px">Team feed <span id="fcount" style="color:var(--muted);font-weight:600"></span></b>
+    <button class="ghost" id="fref">↻</button></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Chỉ summary — không hiển thị raw thinking. Mới nhất ở trên.</div>
+    <div id="feed"></div></div>
+</div>
 </div>
 <script>
 const ZONES=["lead_brief","business_context","estimate","proposal","requirements","design_spec","ui_system","architecture","task_backlog","build_results","security_report"];
@@ -125,4 +142,15 @@ $("stepBtn").onclick=step;
 $("reset").onclick=async()=>{playing=false;clearTimeout(timer);$("play").textContent="▶ Chạy";render(await api("/api/reset?dev_high="+$("risk").checked,"POST"));};
 $("risk").onchange=$("reset").onclick;
 api("/api/state").then(render);
+const FT={ASSIGN:"#475569",SPAWN:"var(--sonnet)",RESULT:"var(--ok)",BLOCKED:"var(--assume)",DECISION:"var(--opus)",KILL:"var(--bad)"};
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function tree(ns){return ns.length?`<ul>${ns.map(n=>`<li><b>${esc(n.id)}</b>${n.status?` <span style="color:var(--muted)">· ${esc(n.status)}${n.attempts>1?` ×${n.attempts}`:""}</span>`:""}${tree(n.children)}</li>`).join("")}</ul>`:"";}
+async function loadFeed(){const f=await api("/api/feed");
+  $("fcount").textContent="· "+f.events.length+" sự kiện";
+  $("tree").innerHTML=tree(f.spawn_tree)||'<div style="font-size:12px;color:var(--muted)">chưa có spawn</div>';
+  $("feed").innerHTML=f.events.slice().reverse().map(e=>`<div class="ev"><span class="t" style="background:${FT[e.type]}">${e.type}</span>
+    <div><div>${esc(e.summary)}</div><div class="who">${esc(e.actor||"—")} · ${esc(e.source)}</div></div></div>`).join("")||'<div style="font-size:12px;color:var(--muted)">chưa có sự kiện</div>';}
+function tab(f){$("paneP").style.display=f?"none":"";$("paneF").style.display=f?"":"none";
+  $("tabP").classList.toggle("on",!f);$("tabF").classList.toggle("on",f);if(f)loadFeed();}
+$("tabP").onclick=()=>tab(false);$("tabF").onclick=()=>tab(true);$("fref").onclick=loadFeed;
 </script></body></html>

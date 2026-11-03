@@ -15,6 +15,7 @@ from src.agents.a2_estimation import enrich
 from src.iso import impact, conformance, inventory
 from src.orchestrator import status as pstatus
 from src.orchestrator import gate_view
+from src.orchestrator import team_feed
 from src.orchestrator.autonomy import Autonomy
 from src.agents import e1_pm
 
@@ -236,3 +237,10 @@ def pm_report():
     except Exception:
         pass
     return {"project_status": S.board.get("project_status"), "report": e1_pm.report(S.board)}
+
+
+@app.get("/api/feed")
+def feed(limit: int = 100):
+    """H5 Team feed (chỉ đọc): timeline ASSIGN/SPAWN/RESULT/BLOCKED/DECISION/KILL + cây spawn.
+    Chỉ summary — không raw thinking/transcript (src/orchestrator/team_feed.py)."""
+    return team_feed.build(S.board, limit=max(1, min(int(limit), 500)))

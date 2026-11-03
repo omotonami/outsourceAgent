@@ -5,19 +5,21 @@ Mock mặc định (không tốn token). Đặt LIVE=1 + ANTHROPIC_API_KEY để
 Kịch bản bước + payload mẫu: src/server/demo.py."""
 import copy
 import logging
+import time
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from jsonschema import ValidationError
 
 from src.agents import e1_pm
+from src.blackboard import eventstore
 from src.blackboard.store import Blackboard, PermissionDenied
 from src.common.config import ConfigError
 from src.governance import confirm
 from src.iso import conformance, impact, inventory
-from src.orchestrator import gate_view, room_state, team_feed
+from src.orchestrator import gate_view, room_state, room_stream, team_feed, usage
 from src.orchestrator import status as pstatus
 from src.orchestrator.autonomy import Autonomy
 from src.server import demo
@@ -43,7 +45,7 @@ class Session:
         self.dev_high = dev_high
         self.steps = plan(dev_high)
         self.i = 0
-        self.board = Blackboard("DASH")
+        self.board = Blackboard("DASH", store=None)   # board demo trong RAM: server không ghi event store
         self.board.write("lead_brief", copy.deepcopy(demo.LEAD_BRIEF), agent="intake")
         self.log = []
         self.signed = {}
@@ -224,14 +226,77 @@ def _room_levels():
         return {}
 
 
+# ----- Phòng 3D realtime: đọc event store dùng chung (process khác ghi), CHỈ ĐỌC -----
+EVENTSTORE = None     # test thay bằng EventStore(tmp, readonly=True); None → store theo config (readonly)
+
+
+def _store():
+    return EVENTSTORE if EVENTSTORE is not None else eventstore.EventStore(eventstore.default_path(), readonly=True)
+
+
+def _rt(key):
+    return eventstore.settings()[key]
+
+
+def _known(project: str) -> bool:
+    return _store().last_seq(project) > 0
+
+
+@app.get("/api/projects")
+def projects():
+    """Project có trong event store: {id, last_ts, phase, state, active (ghi trong live_window_s)}; live trước."""
+    return {"projects": room_stream.projects(_store(), live_window_s=float(_rt("live_window_s"))),
+            "live_window_s": _rt("live_window_s"), "now": time.time(),
+            "pricing": {t: {"in": pin * 1e6, "out": pout * 1e6} for t, (pin, pout) in usage.prices().items()}}
+
+
+@app.get("/api/room/frames")
+def room_frames(project: str, since: int = 0):
+    """Replay (chỉ đọc): frame theo seq từ `since` — cùng dạng frame của /api/room/stream."""
+    if not _known(project):
+        return JSONResponse({"error": f"không có project {project!r} trong event store"}, 404)
+    feed = room_stream.RoomFeed(_store(), project, since=max(0, int(since)))
+    return {"project": project, "frames": feed.poll(_room_levels(), limit=room_stream.FRAMES_MAX)}
+
+
+@app.get("/api/room/stream")
+async def room_stream_sse(request: Request, project: str, since: int | None = None):
+    """SSE (text/event-stream): frame mới theo seq. Last-Event-ID (nối lại) ưu tiên hơn `since`;
+    không có cả hai → gửi event `snapshot` trước. Chỉ đọc store."""
+    if not _known(project):
+        return JSONResponse({"error": f"không có project {project!r} trong event store"}, 404)
+    hdr = request.headers.get("last-event-id")
+    if hdr and hdr.strip().isdigit():
+        since = int(hdr)
+    feed = room_stream.RoomFeed(_store(), project, since=since)
+    gen = room_stream.stream(feed, poll_s=float(_rt("poll_ms")) / 1000, heartbeat_s=float(_rt("heartbeat_s")),
+                             levels=_room_levels(), initial=since is None, is_disconnected=request.is_disconnected)
+    return StreamingResponse(gen, media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.get("/api/room")
-def room(limit: int = room_state.EVENT_LIMIT):
-    """Phòng 3D (chỉ đọc): agent + trạng thái, task, event trao đổi (chỉ summary, không raw thinking)."""
+def room(limit: int = room_state.EVENT_LIMIT, project: str | None = None):
+    """Phòng 3D (chỉ đọc): agent + trạng thái, task, event trao đổi (chỉ summary, không raw thinking).
+    `project`: snapshot từ event store (+ seq để nối /api/room/stream); không có → board DASH như cũ."""
+    lim = max(1, min(int(limit), FEED_LIMIT_MAX))
+    if project:
+        if not _known(project):
+            return JSONResponse({"error": f"không có project {project!r} trong event store"}, 404)
+        return room_stream.RoomFeed(_store(), project).snapshot(_room_levels(), limit=lim)
     cur = S.steps[S.i] if S.i < len(S.steps) else {}
     gate = {"id": cur["gate"], "agents": _gate_agents(S.i)} if cur.get("gate") else None
     active = [] if gate or not cur else _step_agents(cur)
-    return room_state.snapshot(S.board, active=active, gate=gate, levels=_room_levels(),
-                               limit=max(1, min(int(limit), FEED_LIMIT_MAX)))
+    return {**room_state.snapshot(S.board, active=active, gate=gate, levels=_room_levels(), limit=lim),
+            "usage": _dash_usage()}
+
+
+def _dash_usage():
+    """Token của board DASH: log bước demo (tier + tok in/out); đơn giá config/pricing.yaml."""
+    u = usage.Usage()
+    for e in S.log:
+        u.add(e["agent"], e["tier"], e["tok"][0], e["tok"][1])
+    return u.to_dict()
 
 
 @app.get("/room", response_class=HTMLResponse)

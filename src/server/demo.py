@@ -5,9 +5,7 @@ Nối vào router thật để lấy tier + lý do. Không gọi model (token l�
 from src.agents.a2_estimation import enrich
 from src.common import config
 from src.gateway import router
-
-# giá minh hoạ USD / token (in, out) — chỉ để hiển thị chi phí demo
-PRICE = {"haiku": (1e-6, 5e-6), "sonnet": (3e-6, 15e-6), "opus": (15e-6, 75e-6)}
+from src.orchestrator import usage
 
 # zone → agent-writer (dùng cho ghi demo và để biết output của agent nào được duyệt ở gate)
 ZONE_WRITER = {"lead_brief": "intake", "business_context": "a1_bu", "estimate": "a2_estimation",
@@ -101,5 +99,4 @@ def gate_agents(steps, idx):
 
 def step_cost(step):
     """Chi phí minh hoạ (USD) của một bước có tier."""
-    pin, pout = PRICE[step["tier"]]
-    return step["tok"][0] * pin + step["tok"][1] * pout
+    return usage.step_cost(step["tier"], step["tok"])      # đơn giá: config/pricing.yaml

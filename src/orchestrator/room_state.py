@@ -129,10 +129,16 @@ def _risk_blocked_agents(board) -> set:
             if team_feed.is_open_risk(r) and str(r.get("severity") or "").lower() in team_feed.BLOCKING_SEVERITY}
 
 
+def agent_meta(root=None) -> list[dict]:
+    """Danh sách agent (id, name, role, phase) từ specs — caller gọi nhiều snapshot có thể dùng lại."""
+    return _agent_meta(root)
+
+
 def snapshot(board, *, active=(), gate: dict | None = None, levels: dict | None = None,
-             limit: int | None = EVENT_LIMIT, root=None) -> dict:
+             limit: int | None = EVENT_LIMIT, root=None, meta: list[dict] | None = None) -> dict:
     """Payload GET /api/room. `active`: agent đang chạy bước hiện tại (caller biết, vd dashboard demo);
-    `gate`: {id, agents} khi đang chờ người ký; `levels`: agent → 'L0'..'L2' (Autonomy, nếu có)."""
+    `gate`: {id, agents} khi đang chờ người ký; `levels`: agent → 'L0'..'L2' (Autonomy, nếu có);
+    `meta`: kết quả agent_meta() dựng sẵn (không thì đọc specs)."""
     ts = tasks(board)
     evs = events(board)
     if limit:
@@ -140,7 +146,7 @@ def snapshot(board, *, active=(), gate: dict | None = None, levels: dict | None 
     gate_agents = set((gate or {}).get("agents") or [])
     risk_blocked = _risk_blocked_agents(board)
     agents = []
-    for a in _agent_meta(root):
+    for a in (meta if meta is not None else _agent_meta(root)):
         mine = [t for t in ts if t["owner_agent"] == a["id"] and t["status"] in (*WORKER_STATES, BLOCKED)]
         if any(t["status"] == BLOCKED for t in mine) or a["id"] in risk_blocked:
             status = "blocked"

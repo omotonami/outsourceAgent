@@ -18,7 +18,7 @@ font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-
 body{display:flex;overflow:hidden}
 #stage{position:relative;flex:0 0 65%;min-width:0;height:100vh;background:#F1ECE4;overflow:hidden}
 #stage canvas{display:block;touch-action:none}
-#labels{position:absolute;inset:0;pointer-events:none}
+#labels{position:absolute;inset:0;pointer-events:none;z-index:1}   /* stacking context: nhãn 3D không đè HUD */
 #panel{flex:1;min-width:0;height:100vh;display:flex;flex-direction:column;background:var(--paper);border-left:1px solid var(--line)}
 .hud{position:absolute;left:12px;right:12px;top:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;pointer-events:none;z-index:3}
 .hud>*{pointer-events:auto}
@@ -26,7 +26,30 @@ body{display:flex;overflow:hidden}
 .ttl b{font-size:14px}.ttl .sub{font-size:11px;color:var(--muted);margin-top:1px}
 .ttl a{color:var(--muted);font-size:11px;text-decoration:none;margin-left:6px}
 .badge{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.06em;padding:2px 6px;border-radius:5px;margin-left:6px;vertical-align:2px}
-.badge.demo{background:#B5720E;color:#fff}.badge.live{background:#15803D;color:#fff}
+.badge.demo{background:#B5720E;color:#fff}.badge.live{background:#15803D;color:#fff}.badge.replay{background:#7C5CC4;color:#fff}
+.prow{display:none;align-items:center;gap:6px;margin-top:5px}.prow.show{display:flex}
+.prow select{font:600 11.5px/1.2 inherit;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px 4px;max-width:270px}
+.ldot{width:8px;height:8px;border-radius:50%;background:#cbd2d9;flex:none}.ldot.on{background:#15803D;box-shadow:0 0 0 3px rgba(21,128,61,.2);animation:pulse2 1.6s ease-in-out infinite}
+@keyframes pulse2{50%{box-shadow:0 0 0 5px rgba(21,128,61,.08)}}
+.prow .rp{font:700 11px inherit;border:1px solid var(--line);background:#fff;border-radius:6px;padding:3px 7px;cursor:pointer;color:var(--ink);text-decoration:none}
+/* token đã đốt — góc phải trên canvas */
+.usage{position:absolute;right:12px;top:58px;z-index:3;min-width:150px;max-width:230px;background:rgba(255,255,255,.93);border:1px solid var(--line);
+border-radius:10px;padding:6px 10px;box-shadow:0 1px 3px rgba(0,0,0,.05);cursor:pointer;user-select:none;font-variant-numeric:tabular-nums}
+.usage .u1{display:flex;align-items:baseline;gap:5px;white-space:nowrap}
+.usage .ut{font-size:16px;font-weight:800}.usage .uu{font-size:10.5px;color:var(--muted);font-weight:700}
+.usage .uc{margin-left:auto;font-size:11.5px;font-weight:700;color:#5C6B7A}
+.usage .uarr{font-size:10px;color:#15803D;opacity:0;transition:opacity .2s}
+.usage.up .uarr{opacity:1}.usage.up .ut{animation:tick .9s ease-out}
+@keyframes tick{0%{color:#15803D}100%{color:var(--ink)}}
+.usage .ubar{display:none;height:5px;border-radius:3px;background:#EEF1F4;margin-top:5px;overflow:hidden}.usage .ubar.show{display:block}
+.usage .ubar i{display:block;height:100%;width:0;background:#15803D;transition:width .4s}
+.usage .ubar.warn i{background:#D9A21B}.usage .ubar.over i{background:#C0392B}
+.usage .upct{display:none;font-size:10px;color:var(--muted);margin-top:2px}.usage .upct.show{display:block}
+.usage .ulist{display:none;margin-top:6px;border-top:1px solid var(--line);padding-top:5px}.usage.open .ulist{display:block}
+.usage .ur{display:grid;grid-template-columns:1fr auto;gap:1px 8px;font-size:11px;padding:2px 0}
+.usage .ur b{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.usage .ur span{color:var(--muted)}
+.usage .ur i{grid-column:1/3;display:block;height:3px;border-radius:2px;background:#3B7DD8;opacity:.55}
+.usage .usub{font-size:10px;color:var(--muted);margin-top:4px}
 .ctl{display:flex;gap:4px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:10px;padding:4px}
 .ctl button{border:0;background:transparent;color:var(--ink);font:600 12px/1 inherit;padding:7px 9px;border-radius:7px;cursor:pointer;min-width:34px}
 .ctl button.on{background:var(--ink);color:#fff}
@@ -109,16 +132,21 @@ font-size:12.5px;cursor:pointer;border-radius:6px}
   .lbl{font-size:9px;padding:1px 5px 1px 4px;gap:3px;transform:translateY(-12px)}.lbl .d{width:6px;height:6px}.lbl.child{font-size:8.5px}
   .bub{max-width:140px;font-size:10px}.zone{font-size:8.5px;padding:2px 5px}.alert{width:16px;height:16px;font-size:11px}.gatebar{top:56px;font-size:11.5px}
   .ctl button{padding:7px 7px;min-width:30px}
+  .prow select{max-width:170px;font-size:11px}.prow .rp{padding:3px 5px}.ttl{max-width:64%}
+  .usage{top:52px;right:8px;min-width:0;max-width:60%;padding:4px 8px}.usage .ut{font-size:13px}
+  .usage .ubar{display:none!important}.usage .uu{display:none}
 }
 @media (prefers-reduced-motion: reduce){
-  .alert.show{animation:none}.msg.new{animation:none}.bub{transition:none}.task.flash{animation:none}
+  .alert.show{animation:none}.msg.new{animation:none}.ldot.on{animation:none}.usage.up .ut{animation:none}.bub{transition:none}.task.flash{animation:none}
 }
 </style></head><body>
 <div id="stage">
   <div id="labels"></div>
   <div class="hud">
     <div class="ttl"><b>Phòng 3D · team agent</b><span id="badge" class="badge demo">DEMO</span><a href="/">← Dashboard</a>
-      <div class="sub" id="modeTxt">Kịch bản mẫu chạy lặp</div></div>
+      <div class="sub" id="modeTxt">Kịch bản mẫu chạy lặp</div>
+      <div class="prow" id="prow"><span class="ldot" id="ldot" title="đang hoạt động"></span>
+        <select id="proj" aria-label="Chọn project"></select><a class="rp" id="rpBtn" href="#" title="Xem lại từ đầu">⟲ Replay</a></div></div>
     <div class="ctl" role="group" aria-label="Điều khiển">
       <button id="pause" title="Tạm dừng / chạy tiếp">❚❚</button>
       <button data-sp="1" class="on">1x</button><button data-sp="2">2x</button><button data-sp="4">4x</button>
@@ -126,6 +154,11 @@ font-size:12.5px;cursor:pointer;border-radius:6px}
     </div>
   </div>
   <div class="gatebar" id="gatebar"></div>
+  <div class="usage" id="usage" role="button" tabindex="0" aria-expanded="false" title="Token đã đốt — bấm xem top agent">
+    <div class="u1"><span class="ut" id="uTot">0</span><span class="uu">token</span><span class="uarr">▲</span><span class="uc" id="uCost">$—</span></div>
+    <div class="ubar" id="uBar"><i></i></div><div class="upct" id="uPct"></div>
+    <div class="ulist" id="uList"></div>
+  </div>
   <div class="legend" id="legend"></div>
   <div class="hint">Kéo để xoay · cuộn để zoom · bấm nhân vật để lọc</div>
   <div id="err"></div>
@@ -778,23 +811,72 @@ async function runDemo(){
     STATE = {agents: FALLBACK_AGENTS.map(a=>({...a, level: levels[a.id]||'L0'})), tasks: [], gate: null};
     for (const t of [...kids.keys()]) killKid(t);
     for (const c of chars.values()){ c.inHuddle=false; }
-    logItems = []; renderLog(); applyState();
+    logItems = []; renderLog(); applyState(); demoUsageReset();
     for (const s of demoScript()){
       demoApply(s);
-      if (s.ev) playEvent({...s.ev, ts: Date.now()/1000});
+      if (s.ev){ playEvent({...s.ev, ts: Date.now()/1000}); if (['RESULT','DECISION'].includes(s.ev.type)) demoBurn(s.ev.from); }
       await sleep(s.wait);
     }
     await sleep(500);
   }
 }
 
-// ---------------- LIVE: poll /api/room mỗi 2s, chỉ animate event mới ----------------
-const seen = new Set(); let liveQueue = [];
-async function fetchRoom(timeoutMs=4000){
+// ---------------- token đã đốt (góc phải trên canvas) ----------------
+const usageEl = document.getElementById('usage');
+let USAGE = null, PRICING = null;
+const fmtTok = n => { n = +n||0; return n>=1e6 ? (n/1e6).toFixed(n>=1e7?0:1)+'M' : n>=1e3 ? (n/1e3).toFixed(n>=1e5?0:1)+'k' : String(n); };
+const fmtUsd = v => v==null ? '$—' : '$' + (v>=100 ? v.toFixed(0) : v>=1 ? v.toFixed(2) : v.toFixed(3));
+const agentLabel = id => { const m = /^huddle:(.+)$/.exec(id||''); return m ? `Huddle · ${nameOf(m[1])}` : nameOf(id); };
+function setUsage(u){
+  if (!u) return;
+  const prev = USAGE ? USAGE.total : null; USAGE = u;
+  document.getElementById('uTot').textContent = fmtTok(u.total);
+  document.getElementById('uCost').textContent = fmtUsd(u.est_cost_usd);
+  usageEl.title = `Token đã đốt: ${(+u.total||0).toLocaleString()} (in ${(+u.tokens_in||0).toLocaleString()} · out ${(+u.tokens_out||0).toLocaleString()}) · ${u.calls||0} lần gọi · chi phí ƯỚC TÍNH theo config/pricing.yaml — bấm xem top agent`;
+  const bar = document.getElementById('uBar'), pct = document.getElementById('uPct'), b = u.budget;
+  bar.classList.toggle('show', !!b); pct.classList.toggle('show', !!b);
+  if (b){ const r = +b.ratio||0, w = +b.warn_at_ratio||0.8;
+    bar.querySelector('i').style.width = Math.min(100, r*100).toFixed(1)+'%';
+    bar.classList.toggle('warn', r>=w && r<1); bar.classList.toggle('over', r>=1);
+    pct.textContent = `${(r*100).toFixed(0)}% budget (${fmtTok(b.used)}/${fmtTok(b.limit)})`; }
+  const top = Object.entries(u.by_agent||{}).sort((a,b)=>b[1]-a[1]), mx = top.length ? top[0][1] : 1;
+  document.getElementById('uList').innerHTML = (top.length ? top.map(([id,n])=>`<div class="ur"><b>${esc(agentLabel(id))}</b><span>${fmtTok(n)}</span><i style="width:${(n/mx*100).toFixed(0)}%"></i></div>`).join('')
+    : '<div class="usub">Chưa có lần gọi model.</div>')
+    + `<div class="usub">${Object.entries(u.by_tier||{}).map(([t,v])=>`${esc(t)} ${fmtTok(v.total)}`).join(' · ')}${u.calls?` · ${u.calls} lần gọi`:''}</div>`;
+  if (prev!=null && u.total>prev){ usageEl.classList.remove('up'); void usageEl.offsetWidth; usageEl.classList.add('up');
+    clearTimeout(setUsage._t); setUsage._t = setTimeout(()=>usageEl.classList.remove('up'), 1200); }
+}
+function toggleUsage(){ const o = usageEl.classList.toggle('open'); usageEl.setAttribute('aria-expanded', o); }
+usageEl.onclick = toggleUsage; usageEl.onkeydown = e=>{ if (e.key==='Enter'||e.key===' '){ e.preventDefault(); toggleUsage(); } };
+// Demo: token giả lập theo kịch bản; chi phí chỉ khi đọc được đơn giá từ server (/api/projects → pricing).
+const DEMO_TIER = {a1_bu:'sonnet',a2_estimation:'sonnet',a3_proposal:'opus',b1_ba:'sonnet',b2_ux:'sonnet',b3_ui:'sonnet',b4_tech_lead:'opus',
+  c1_dev:'opus',c2_tester:'sonnet',c3_qc:'opus',d1_soc:'haiku',e1_pm:'haiku',e2_cos:'haiku'};
+let demoU = null;
+function demoUsageReset(){ demoU = {tokens_in:0,tokens_out:0,total:0,calls:0,by_agent:{},by_tier:{},est_cost_usd:PRICING?0:null,budget:null}; setUsage(demoU); }
+function demoBurn(agent){
+  const tier = DEMO_TIER[agent]; if (!tier || !demoU) return;
+  const h = hash(agent + demoU.calls), tin = 1200 + h%1800, tout = 700 + (h>>4)%1500;
+  const u = {...demoU, by_agent:{...demoU.by_agent}, by_tier:{...demoU.by_tier}};
+  u.tokens_in += tin; u.tokens_out += tout; u.total += tin+tout; u.calls += 1;
+  u.by_agent[agent] = (u.by_agent[agent]||0) + tin + tout;
+  const t = u.by_tier[tier] || {tokens_in:0,tokens_out:0,total:0,calls:0};
+  u.by_tier[tier] = {tokens_in:t.tokens_in+tin, tokens_out:t.tokens_out+tout, total:t.total+tin+tout, calls:t.calls+1};
+  if (PRICING && PRICING[tier]) u.est_cost_usd = (u.est_cost_usd||0) + (tin*PRICING[tier].in + tout*PRICING[tier].out)/1e6;
+  demoU = u; setUsage(u);
+}
+
+// ---------------- LIVE / REPLAY ----------------
+const seen = new Set(); let liveQueue = [], queueRunning = false;
+window.__roomLat = [];          // độ trễ store → trình duyệt (giây) của từng frame SSE, để đo
+async function getJSON(url, timeoutMs=4000){
   const ctl = new AbortController(); const to = setTimeout(()=>ctl.abort(), timeoutMs);
-  try { const r = await fetch('/api/room?limit=200', {cache:'no-store', signal:ctl.signal}); if (!r.ok) throw new Error('HTTP '+r.status); return await r.json(); }
+  try { const r = await fetch(url, {cache:'no-store', signal:ctl.signal}); if (!r.ok) throw new Error('HTTP '+r.status); return await r.json(); }
   finally { clearTimeout(to); }
 }
+const roomURL = () => PROJECT ? `/api/room?limit=200&project=${encodeURIComponent(PROJECT)}` : '/api/room?limit=200';
+const fetchRoom = (ms) => getJSON(roomURL(), ms);
+function showErr(t){ const el=document.getElementById('err'); el.textContent=t; el.style.display='block'; }
+function hideErr(){ document.getElementById('err').style.display='none'; }
 function applySnapshot(snap, first){
   STATE = {agents: snap.agents||[], tasks: snap.tasks||[], gate: snap.gate};
   makeAgents(STATE.agents);
@@ -807,36 +889,114 @@ function applySnapshot(snap, first){
       spawnKid(t.id, (['in_dev','blocked'].includes(t.status) && t.owner_agent) || 'c1_dev', D, false);
     renderLog();
   }
+  if (snap.usage) setUsage(snap.usage);
   applyState();
 }
-async function runLive(first){
-  applySnapshot(first, true);
-  (async()=>{ for(;;){ const e = liveQueue.shift(); if (e){ playEvent(e); await sleep(1100); } else await sleep(250); } })();
+function applyFrame(f){
+  window.__roomLat.push(Date.now()/1000 - f.ts);
+  applySnapshot({agents:f.agents, tasks:f.tasks, gate:f.gate, events:f.events, usage:f.usage}, false);
+}
+function startQueue(){
+  if (queueRunning) return; queueRunning = true;
+  // hàng đợi dài (nhiều event cùng lúc) → phát nhanh hơn để không tụt xa thực tế
+  (async()=>{ for(;;){ const e = liveQueue.shift(); if (e){ playEvent(e); await sleep(Math.max(220, 1100 - 160*liveQueue.length)); } else await sleep(150); } })();
+}
+async function runLive(first){          // board DASH của dashboard: poll /api/room mỗi 2s (như cũ)
+  applySnapshot(first, true); startQueue();
   for(;;){
     await new Promise(r=>setTimeout(r, 2000));
-    try { applySnapshot(await fetchRoom(), false); document.getElementById('err').style.display='none'; }
-    catch(err){ const el=document.getElementById('err'); el.textContent='Mất kết nối /api/room — đang thử lại…'; el.style.display='block'; }
+    try { applySnapshot(await fetchRoom(), false); hideErr(); }
+    catch(err){ showErr('Mất kết nối /api/room — đang thử lại…'); }
+  }
+}
+let lastSeq = 0;
+function runStream(first){              // project trong event store: SSE, fallback poll khi SSE lỗi
+  applySnapshot(first, true); lastSeq = first.seq||0; startQueue();
+  let es = null, pollT = null, retryT = null;
+  const stopPoll = ()=>{ if (pollT){ clearInterval(pollT); pollT=null; } };
+  const startPoll = ()=>{ if (pollT) return; pollT = setInterval(async()=>{
+      try { const s = await fetchRoom(); applySnapshot(s, false); lastSeq = Math.max(lastSeq, s.seq||0); }
+      catch(e){ showErr('Mất kết nối server — đang thử lại…'); } }, 2000); };
+  const connect = ()=>{
+    retryT = null;
+    es = new EventSource(`/api/room/stream?project=${encodeURIComponent(PROJECT)}&since=${lastSeq}`);
+    es.addEventListener('room', m=>{ const f = JSON.parse(m.data); applyFrame(f); lastSeq = Math.max(lastSeq, f.seq); stopPoll(); hideErr(); });
+    es.onopen = ()=>{ stopPoll(); hideErr(); };
+    es.onerror = ()=>{ showErr('SSE gián đoạn — tạm poll /api/room, đang nối lại…'); startPoll();
+      if (es.readyState===2 && !retryT){ es.close(); retryT = setTimeout(connect, 4000); } };   // 2 = CLOSED
+  };
+  connect();
+}
+function resetRoom(){
+  STATE = {agents: (STATE.agents.length?STATE.agents:FALLBACK_AGENTS).map(a=>({...a, status:'idle', current_task:null, tasks:[]})), tasks: [], gate: null};
+  for (const t of [...kids.keys()]) killKid(t);
+  for (const c of chars.values()){ c.inHuddle=false; }
+  liveQueue = []; seen.clear(); logItems = []; renderLog(); applyState();
+}
+async function runReplay(){
+  let frames;
+  try { frames = (await getJSON(`/api/room/frames?project=${encodeURIComponent(PROJECT)}&since=0`, 8000)).frames || []; }
+  catch(e){ showErr('Không đọc được replay — '+e.message); return; }
+  const meta = document.getElementById('modeTxt');
+  for (;;){
+    resetRoom(); setUsage({tokens_in:0,tokens_out:0,total:0,calls:0,by_agent:{},by_tier:{},est_cost_usd:0,budget:null});
+    for (let i=0;i<frames.length;i++){
+      const f = frames[i];
+      STATE = {agents:f.agents, tasks:f.tasks, gate:f.gate}; makeAgents(STATE.agents); applyState(); setUsage(f.usage);
+      for (const e of f.events){ if (seen.has(e.id)) continue; seen.add(e.id); playEvent(e); await sleep(1000); }
+      meta.textContent = `Replay ${PROJECT} · seq ${f.seq} · ${i+1}/${frames.length} frame`;
+      if (!f.events.length) await sleep(250);
+    }
+    await sleep(4000);
   }
 }
 
 // ---------------- khởi động ----------------
-let MODE = 'demo';
-buildRoom(); makeAgents(FALLBACK_AGENTS); applyState(); renderLog();
+let MODE = 'demo', PROJECT = null;
+buildRoom(); makeAgents(FALLBACK_AGENTS); applyState(); renderLog(); setUsage({tokens_in:0,tokens_out:0,total:0,calls:0,by_agent:{},by_tier:{},est_cost_usd:null,budget:null});
 requestAnimationFrame(frame);
+function setBadge(kind, txt){ const b = document.getElementById('badge'); b.textContent = kind.toUpperCase(); b.className = 'badge '+kind;
+  document.getElementById('modeTxt').textContent = txt; MODE = kind; }
+function projectPicker(list, current){
+  const sel = document.getElementById('proj'), row = document.getElementById('prow');
+  const opt = (v, t) => `<option value="${esc(v)}"${v===(current||'')?' selected':''}>${esc(t)}</option>`;
+  sel.innerHTML = opt('', 'Dashboard (DASH)') + list.map(p=>opt(p.id, `${p.active?'● ':'○ '}${p.id}${p.phase_name?' · '+p.phase_name:''}`)).join('') + opt('__demo', 'Demo (kịch bản mẫu)');
+  row.classList.add('show');
+  const cur = list.find(p=>p.id===current);
+  document.getElementById('ldot').classList.toggle('on', !!(cur && cur.active));
+  const rp = document.getElementById('rpBtn'); rp.style.display = cur ? '' : 'none';
+  if (cur){ const q = new URLSearchParams({project:cur.id}); if (MODE!=='replay') q.set('replay','1');
+    rp.href = '?'+q; rp.textContent = MODE==='replay' ? (cur.active?'● Live':'⟲ Replay lại') : '⟲ Replay'; }
+  sel.onchange = ()=>{ const v = sel.value; location.search = v==='__demo' ? '?demo=1' : v ? '?'+new URLSearchParams({project:v}) : '?dash=1'; };
+}
 (async()=>{
   const q = new URLSearchParams(location.search), force = q.has('demo') && q.get('demo')!=='0';
-  let snap = null;
-  if (!force && location.protocol!=='file:'){ try { snap = await fetchRoom(2500); } catch(e){ snap = null; } }
-  const badge = document.getElementById('badge');
-  if (snap && Array.isArray(snap.agents)){
-    MODE='live'; badge.textContent='LIVE'; badge.className='badge live';
-    document.getElementById('modeTxt').textContent='Blackboard thật · cập nhật mỗi 2s';
-    runLive(snap);
-  } else {
-    MODE='demo'; badge.textContent='DEMO'; badge.className='badge demo';
-    document.getElementById('modeTxt').textContent='Kịch bản mẫu: presales → discovery → build → G3';
-    runDemo();
+  let plist = null;
+  if (location.protocol!=='file:'){ try { plist = await getJSON('/api/projects', 2500); PRICING = plist.pricing || null; } catch(e){ plist = null; } }
+  if (!force && plist){
+    const list = plist.projects || [];
+    PROJECT = q.get('project') || null;
+    if (PROJECT && !list.some(p=>p.id===PROJECT)) { showErr(`Không có project ${PROJECT} trong event store — hiện board Dashboard.`); PROJECT = null; }
+    if (!PROJECT && !q.has('project') && !q.has('dash')){ const a = list.find(p=>p.active); if (a) PROJECT = a.id; }
+    const cur = list.find(p=>p.id===PROJECT);
+    if (cur && (q.get('replay')==='1' || !cur.active)){
+      setBadge('replay', `Replay từ event store · ${PROJECT}`); projectPicker(list, PROJECT); runReplay(); return;
+    }
+    let snap = null; try { snap = await fetchRoom(3000); } catch(e){ snap = null; }
+    if (snap && Array.isArray(snap.agents)){
+      setBadge('live', PROJECT ? `Event store · ${PROJECT} · SSE realtime` : 'Board Dashboard (DASH) · cập nhật mỗi 2s');
+      projectPicker(list, PROJECT);
+      if (PROJECT) runStream(snap); else runLive(snap);
+      setInterval(async()=>{ try { const pl = await getJSON('/api/projects', 4000); projectPicker(pl.projects||[], PROJECT); } catch(e){} }, 10000);
+      return;
+    }
   }
+  if (!force && !plist && location.protocol!=='file:'){        // server cũ không có /api/projects
+    try { const snap = await fetchRoom(2500); if (snap && Array.isArray(snap.agents)){ setBadge('live','Blackboard thật · cập nhật mỗi 2s'); runLive(snap); return; } } catch(e){}
+  }
+  setBadge('demo', 'Kịch bản mẫu: presales → discovery → build → G3');
+  if (plist) projectPicker(plist.projects||[], '__demo');
+  runDemo();
 })();
 </script>
 </body></html>

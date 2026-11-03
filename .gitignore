@@ -17,3 +17,6 @@ venv/
 # Dữ liệu sinh ra lúc chạy
 data/ai_inventory/
 knowledge/*/learned/PROPOSED.md
+
+# Event store Phòng 3D realtime (SQLite, src/blackboard/eventstore.py)
+data/runtime/

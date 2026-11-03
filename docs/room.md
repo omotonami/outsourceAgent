@@ -3,29 +3,38 @@
 Team agent hiển thị như nhân vật low-poly trong một căn phòng: mỗi agent một bàn theo cụm phase
 (A Presales · B Discovery · C Build · D Security · E Ops), đi qua đi lại khi trao đổi. Chỉ đọc.
 
-## Mở
-- Server: `uvicorn src.server.app:app` → `http://localhost:8000/room` (hoặc tab **Phòng 3D** trên dashboard).
-  Badge **LIVE**: poll `GET /api/room` mỗi 2s, chỉ animate event mới.
-- Không server (mở file trực tiếp) hoặc `/room?demo=1` → badge **DEMO**: kịch bản mẫu chạy lặp
-  (presales → G1 → huddle B1/B2 → B4 chia 5 task → 3 worker C1 song song → T3 BLOCKED rồi retry,
-  T2 QC fail → KILL → retry → G3 chờ người). Nút Pause, 1x/2x/4x, ⌂ về góc nhìn mặc định.
-- Three.js `0.170.0` nạp từ jsDelivr qua importmap (cần mạng).
+## Realtime (agent/Dispatcher chạy ở process khác)
+```
+uvicorn src.server.app:app                 # terminal 1 — dashboard, CHỈ ĐỌC event store
+python -m src.demo.live_team --pace 0.8    # terminal 2 — dự án mẫu (huddle + Dispatcher mock, không API key)
+```
+Mở `http://localhost:8000/room` (tự chọn project đang live) hoặc `/room?project=<id>`.
+- **Event store** `src/blackboard/eventstore.py`: SQLite WAL, append-only `(seq, project_id, ts, kind, zone, agent,
+  payload_json)`, kind ∈ zone_write/zone_append/event/sign/revoke. Đường dẫn `config/runtime.yaml → eventstore.path`
+  (mặc định `data/runtime/events.sqlite3`, gitignore) hoặc env `OA_EVENTSTORE_PATH`. `prune()` = retention gọi tay.
+- **Ghi xuyên**: `Blackboard(pid, store=EventStore(...))` (hoặc `eventstore.write_through: true`). Chỉ lượt ghi ĐÃ qua
+  kiểm quyền + schema mới vào store; payload bỏ khoá thinking/prompt/messages/transcript/contract.
+  `Blackboard.load(pid, store)` dựng lại board (không ghi xuyên). Không cấu hình → hành vi cũ.
+- **API (chỉ đọc)**: `GET /api/projects` (live = có ghi trong `live_window_s`, kèm `pricing`) ·
+  `GET /api/room?project=` (snapshot + `seq` + `usage`) · `GET /api/room/stream?project=&since=` (SSE, id = seq,
+  Last-Event-ID nối lại, heartbeat 15s, poll SQLite `poll_ms`) · `GET /api/room/frames?project=&since=0` (replay).
+- **room.html**: dropdown project (● live lên đầu, chấm xanh), badge **LIVE** (SSE; lỗi → poll `/api/room` 2s),
+  **REPLAY** (project đã xong hoặc nút ⟲: tua frame từ seq đầu, 1x/2x/4x), **DEMO** (`?demo=1` / không server),
+  `?dash=1` = board DASH của dashboard (poll như cũ). Đo được: store → trình duyệt trung bình ~0.2s, tối đa < 0.6s.
 
-## Backend — `src/orchestrator/room_state.py` (Code thuần)
-`snapshot(board, active=(), gate=None, levels=None, limit=200)` →
-`{phases, statuses, agents, tasks, events, gate}`.
-- agents: 14 spec + `status` ∈ idle/working/blocked/waiting_gate (ưu tiên blocked > waiting_gate > working),
-  `current_task`, `level` (L0–L2 từ Autonomy nếu đọc được).
-- tasks: từ `task_backlog` (`title` ≤ 80 ký tự, `owner_agent` theo ASSIGN / substate: testing → c2, qc → c3).
-- events: summary của Team feed (`team_feed.py`) + `from`/`to`/`parent`/`agent`, `id` = `<zone>:<idx>`.
-  Không raw thinking/prompt/contract. Không ghi Blackboard.
-- `/api/room`: `active` = agent của bước dashboard hiện tại; `gate` khi bước là gate (G1–G4).
+## Token đã đốt (góc phải trên canvas)
+Gateway `trace.log` → dòng `llm_usage` (kind=event, chỉ agent/tier/model/phase/tokens — không prompt/output) vào store
+của project. `usage = {tokens_in, tokens_out, total, calls, by_agent, by_tier, est_cost_usd, budget}`
+(`src/orchestrator/usage.py`). Đơn giá ước tính: `config/pricing.yaml`; budget: `config/budgets.yaml →
+per_project_tokens` (có số → thanh %, vàng ≥ warn_at_ratio, đỏ ≥ 100%). Bấm thẻ → top agent. Demo: số giả lập.
+
+## Backend snapshot — `src/orchestrator/room_state.py`
+`snapshot(board, active, gate, levels, limit)` → `{phases, statuses, agents, tasks, events, gate}`; events = summary
+Team feed + `from`/`to`, id `<zone>:<idx>`. Frame realtime: `src/orchestrator/room_stream.py`.
 
 ## Hành vi
-ASSIGN/RESULT/DECISION → nhân vật nguồn đi theo lối đi tới bàn đích, bong bóng summary, dòng panel sáng lên,
-rồi về bàn. Huddle → ngồi bàn tròn tới khi có DECISION. SPAWN → worker "nở" cạnh bàn C1; KILL / task xong
-→ mờ dần. BLOCKED → "!" đỏ; chờ gate → ⏳. Bấm nhân vật / dòng agent → camera focus + lọc panel.
-`prefers-reduced-motion` → bỏ nhún/gõ phím, di chuyển tức thì. Mobile ≤760px: canvas trên, panel dưới.
+ASSIGN/RESULT/DECISION → nhân vật đi tới bàn đích, bong bóng summary. Huddle → bàn tròn tới DECISION.
+SPAWN → worker "nở" cạnh C1; KILL / xong → mờ dần. BLOCKED → "!" đỏ; chờ gate → ⏳. Three.js 0.170.0 (jsDelivr).
 
 ## Test
-`tests/contract/test_room_state.py` (gọi thẳng handler route như test_team_feed).
+`tests/contract/test_room_state.py`, `tests/contract/test_eventstore.py` (đa process, SSE, e2e live_team).

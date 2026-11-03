@@ -6,7 +6,14 @@ Quyền tối thiểu:
 - Không hỏi credential (GIT_TERMINAL_PROMPT=0), không ký commit.
 - Chống chèn option: tham số vị trí luôn đứng sau `--` / `--end-of-options`; url/ref/path bắt đầu
   bằng `-` bị từ chối; ref phải qua `_check_ref`.
-- Không chạy code do repo cấu hình: core.fsmonitor tắt, core.hooksPath=/dev/null, transport ext:: cấm.
+- Không chạy code do repo cấu hình (rào chống dùng nhầm, không phải sandbox):
+  core.fsmonitor tắt, core.hooksPath=/dev/null, transport ext:: cấm;
+  `diff` luôn kèm --no-ext-diff --no-textconv (diff.external / diff.<x>.command / textconv không chạy);
+  mọi filter.<x>.clean/smudge/process và merge.<x>.driver có trong config (mọi scope: global + repo,
+  đọc bằng `git config --get-regexp` — lệnh này không chạy code) được ghi đè rỗng bằng `-c` cho từng lệnh,
+  filter.<x>.required=false. Không sửa config của repo/worktree.
+  Còn lại: config khác của repo (vd core.sshCommand) không bị trung hoà — adapter không làm thao tác
+  remote ngoài clone (clone đọc config global, không đọc config của repo nguồn).
 - Không kế thừa biến môi trường GIT_* (GIT_DIR, GIT_CONFIG_*, GIT_SSH_COMMAND...) của tiến trình cha.
 """
 from __future__ import annotations
@@ -48,11 +55,37 @@ def _env() -> dict:
     return env
 
 
+_DRIVER_KEY = re.compile(r"^(filter|merge)\.(.+)\.(clean|smudge|process|driver|required)$")
+
+
+def _neutralize(cwd: Path | str | None) -> list[str]:
+    """`-c` ghi đè rỗng mọi filter/merge driver khai trong config thấy được từ `cwd`."""
+    try:
+        p = subprocess.run(["git", "config", "-z", "--get-regexp", r"^(filter|merge)\..*\."],
+                           cwd=cwd, capture_output=True, text=True, timeout=30, env=_env())
+    except (OSError, subprocess.SubprocessError):
+        return []
+    drivers: set[tuple[str, str]] = set()
+    for item in p.stdout.split("\0"):
+        m = _DRIVER_KEY.match(item.split("\n", 1)[0].strip())
+        if m:
+            drivers.add((m.group(1), m.group(2)))
+    out: list[str] = []
+    for kind, name in sorted(drivers):
+        keys = ([f"filter.{name}.clean=", f"filter.{name}.smudge=", f"filter.{name}.process=",
+                 f"filter.{name}.required=false"] if kind == "filter" else [f"merge.{name}.driver="])
+        for k in keys:
+            out += ["-c", k]
+    return out
+
+
 def _git(args: list[str], cwd: Path | str | None = None, timeout: int = 60) -> str:
     sub = args[0] if args else None
     if sub not in _ALLOWED:
         raise RepoError(f"lệnh git '{sub}' không nằm trong whitelist (không push/remote)")
-    p = subprocess.run(["git", *_BOT, *args], cwd=cwd, capture_output=True, text=True,
+    if sub == "diff":
+        args = ["diff", "--no-ext-diff", "--no-textconv", *args[1:]]
+    p = subprocess.run(["git", *_BOT, *_neutralize(cwd), *args], cwd=cwd, capture_output=True, text=True,
                        timeout=timeout, env=_env())
     if p.returncode != 0:
         raise RepoError(f"git {' '.join(args)} lỗi: {p.stderr.strip()}")
@@ -284,7 +317,8 @@ def list_changed_files(worktree: Path | str, base: str | None = None) -> list[st
 
 
 def diff(worktree: Path | str, base: str = "HEAD") -> str:
-    """Diff file đã track (working tree so với `base`). File untracked không có trong diff."""
+    """Diff file đã track (working tree so với `base`). File untracked không có trong diff.
+    Không chạy diff ngoài / textconv (_git luôn thêm --no-ext-diff --no-textconv)."""
     return _git(["diff", "--end-of-options", _check_ref(base), "--"], cwd=worktree)
 
 

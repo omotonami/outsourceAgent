@@ -153,3 +153,46 @@ def test_cleanup_task_worktrees(tmp_path):
     assert "task/A" not in git._git(["branch", "--list"], cwd=r)
     removed = git.cleanup_task_worktrees(r, force=True)
     assert removed == [w2] and git.list_worktrees(r) == [r.resolve()]
+
+
+# ================= Review cuối #5: không chạy code do repo cấu hình (diff/filter/merge driver) =================
+def _evil_repo(tmp_path):
+    import subprocess
+    log = tmp_path / "pwned"
+    sh = tmp_path / "evil.sh"
+    sh.write_text(f"#!/bin/sh\necho \"$0 $*\" >> {log}\ncat\n")
+    sh.chmod(0o755)
+    r = git.init(tmp_path / "r")
+    (r / "f.txt").write_text("a\n")
+    (r / ".gitattributes").write_text("*.txt filter=x diff=t merge=m\n")
+    git.commit_all(r, "f")                       # trước khi có config độc → commit sạch
+    for k, v in [("diff.external", str(sh)), ("diff.t.textconv", str(sh)), ("diff.t.command", str(sh)),
+                 ("filter.x.clean", str(sh)), ("filter.x.smudge", str(sh)),
+                 ("filter.x.required", "true"), ("merge.m.driver", f"{sh} %A")]:
+        subprocess.run(["git", "-C", str(r), "config", k, v], check=True)
+    return r, log
+
+
+def test_repo_config_cannot_run_code_via_diff_or_filters(tmp_path):
+    r, log = _evil_repo(tmp_path)
+    wt = git.ensure_worktree(r, "T1")
+    (wt / "f.txt").write_text("b\n")
+    d = git.diff(wt)
+    assert "+b" in d and "-a" in d
+    git.list_changed_files(wt, base="HEAD")
+    git.commit_all(wt, "x")
+    git.ensure_worktree(r, "T2")
+    assert not log.exists(), log.read_text()
+
+
+def test_repo_config_cannot_run_merge_driver(tmp_path):
+    r, log = _evil_repo(tmp_path)
+    a = git.ensure_worktree(r, "A")
+    (a / "f.txt").write_text("A\n")
+    git.commit_all(a, "A")
+    b = git.ensure_worktree(r, "B")
+    (b / "f.txt").write_text("B\n")
+    git.commit_all(b, "B")
+    with pytest.raises(git.MergeConflict):
+        git.base_for_deps(r, "C", ["A", "B"])
+    assert not log.exists(), log.read_text()

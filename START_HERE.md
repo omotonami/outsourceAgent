@@ -42,6 +42,8 @@ Chỉ NGƯỜI ký/trả lại (CLAUDE.md luật 10) — 2 đường, cùng lõi
 1. Dashboard: `uvicorn src.server.app:app` → `http://localhost:8000/?project=P-...` tab **Gate dự án** → gõ tên + `XAC NHAN`.
 2. Terminal của người: `python -m src.ops.gate sign --id P-... --gate G1` (trả lại: `reject ... --reason "..."`).
 Ký xong → `python -m src.ops.project run --id P-...` chạy tiếp. Claude không chạy lệnh/API ký (settings deny).
+ESCALATED: cũng chỉ NGƯỜI gỡ — `python -m src.ops.escalation resolve --id P-... --action retry|backtrack:<PHASE>|abandon`
+(TTY, gõ tên + `XAC NHAN`) hoặc `POST /api/projects/{id}/escalation/{action}`; xem `docs/ops/runbook-daily.md`.
 
 ## Ranh giới dữ liệu
 - Dữ liệu công ty (brief, spec, code, tên client, event store, báo cáo nội bộ) **ở lại account/máy công ty**.

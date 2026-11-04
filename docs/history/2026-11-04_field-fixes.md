@@ -90,5 +90,28 @@ agent working; discovery b1→b4; agent lỗi → BLOCKED không chứa raw outp
 
 Số test sau mục 3: **545**.
 
+## Mục 4 — tài liệu
+| Đã đổi gì | File chính |
+|---|---|
+| Runbook: mục mới "ESCALATED — người gỡ" (3 hành động, 2 đường, mã lỗi API, sau đó `run`); dòng sự cố ESCALATED trỏ tới mục này; thêm dòng "Phòng 3D 0 đang làm"; exit code `abandoned` = 0 | `docs/ops/runbook-daily.md` |
+| START_HERE thêm 2 dòng gỡ ESCALATED (55 dòng); README/HANDOFF số test 545 + trỏ file đợt này | `START_HERE.md`, `README.md`, `docs/HANDOFF.md` |
+
+## Mục 5 — đóng gói lại `/home/claude/out/company-kit/`
+Bundle `main` + `feat/v3-bot-team` (sau commit cuối của đợt), zip (`git archive`, prefix `outsourceAgent/`, không có
+`.git`), `START_HERE.md`, `chief-prompt.md` (bản sao `docs/ops/`). Clone thử từ bundle ra `/tmp/kitcheck3` → pytest +
+`history_check --base b7731d3`.
+
+Số test cuối đợt: **545** (481 + 18 runtime + 38 escalation + 8 pipeline events), `agent_lint --all` 14/14,
+`history_check --base b7731d3` PASS.
+
 ## Việc còn mở
-- (cập nhật ở cuối đợt)
+- **UI (đợt bên công ty):** nút gỡ ESCALATED trên dashboard gọi `GET/POST /api/projects/{id}/escalation[/{action}]`
+  (body `signer` + `typed_confirm` "XAC NHAN" + `packet_hash`) — đợt này KHÔNG sửa `index.html`/`room.html`.
+  Phòng 3D không cần đổi UI: `agents[].status` từ API đã có working/blocked theo bước phase.
+- `CLAUDE.md` mục "Vận hành hằng ngày" chưa nhắc `src.ops.escalation` (file thuộc nhóm "ask" — chủ repo quyết có thêm
+  1 dòng không). Luật 10 đã bao phủ.
+- Retry ở BUILD (Dispatcher) chạy lại Dispatcher nhưng không truyền signal nâng tier cho từng worker.
+- Thông điệp lỗi ở lượt retry vẫn chỉ gửi lại khi còn lượt; số lượt (`agent_runtime.schema_retries` = 1) — chủ repo
+  quyết có nâng lên 2 theo card ("retry ≤ 2") không.
+- Card Output của a2 vẫn mô tả estimate SAU khi Code enrich (khác output LLM ở MODULE 4) — có chủ đích, ghi rõ trong spec.
+- Bản ghi resolution trong risk_register có `resolved_by` = tên người do chính người gõ (gate_ui/terminal) — không phải bot điền.

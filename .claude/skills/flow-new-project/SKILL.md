@@ -1,6 +1,6 @@
 ---
 name: flow-new-project
-description: Nhận một việc/brief mới và chạy dự án outsourcing qua FLOW (Orchestrator) tới điểm cần người. Dùng khi chủ repo giao brief/lead mới, hoặc bảo "chạy tiếp dự án P-...", "huddle presales/discovery". Không dùng để ký gate.
+description: Nhận một việc/brief mới và chạy dự án outsourcing qua FLOW (Orchestrator) tới điểm cần người. Dùng khi chủ repo giao brief/lead mới, hoặc bảo "chạy tiếp dự án P-...", "huddle presales/discovery". Không dùng để ký gate (người ký: dashboard hoặc tự gõ `python -m src.ops.gate`).
 ---
 
 # Nhận việc → chạy dự án
@@ -25,10 +25,17 @@ Mọi lệnh chạy ở gốc repo. Dữ liệu dự án là dữ liệu CÔNG T
 ## B. Chạy tiếp dự án đang có
 `python -m src.ops.project status --id P-...` rồi `python -m src.ops.project run --id P-...`.
 `run` dựng lại state từ event store, chạy agent của phase hiện tại (BUILD qua Dispatcher) và DỪNG ở:
-- `AWAIT_GATE (Gx)` → **DỪNG. Báo người** gate nào, ai ký (G1 Sales Lead · G2 Client+PM · G3 Tech Lead ·
-  G4 Tech Lead+bảo mật), mở dashboard (skill `flow-room`). **Claude không ký, không tìm cách ký thay** —
-  không có lệnh ký trong CLI và không được ghi `gate_signatures` / `sign` bằng bất kỳ đường nào (luật 10).
-  Lưu ý hiện tại: gate_ui chỉ ký board demo; ký gate cho project event store chưa có → báo người, không tự làm.
+- `AWAIT_GATE (Gx)` → gate nào, ai ký (G1 Sales Lead · G2 Client+PM · G3 Tech Lead · G4 Tech Lead+bảo mật).
+  **DỪNG. Claude không ký, không trả lại gate, không chạy lệnh ký.** Báo người: gate nào, ai ký, rồi để NGƯỜI
+  chọn một trong hai đường (đều do chính người làm):
+  1. Dashboard: `uvicorn src.server.app:app` → http://localhost:8000 → tab **Gate dự án** (hoặc
+     `http://localhost:8000/?project=P-...`): xem dữ liệu trình gate, gõ tên mình + `XAC NHAN`, bấm Duyệt / Trả lại.
+  2. Terminal CỦA NGƯỜI (không phải terminal của Claude): `python -m src.ops.gate sign --id P-... --gate Gx`
+     hoặc `python -m src.ops.gate reject --id P-... --gate Gx --reason "..."` — người gõ tên + `XAC NHAN`.
+  Claude chỉ đưa lệnh cho người, không chạy (bị `.claude/settings.json` deny + bắt TTY), không gọi
+  `POST /api/projects/*/gate` (curl/http/WebFetch), không gõ tên/`XAC NHAN` thay, không tìm cách lách.
+  Người báo đã ký → Claude chạy lại `python -m src.ops.project run --id P-...` (đọc chữ ký từ event store).
+  Người trả lại → `run` chạy lại agent của phase bị trả rồi dừng ở gate đó lần nữa.
 - `ESCALATED` → DỪNG, báo lý do + risk; người quyết. Không tự gỡ.
 - `BLOCKED` → DỪNG, báo lý do (guard từ chối / task blocked / thiếu key / lỗi mạng). Không nới guard (luật 4).
 

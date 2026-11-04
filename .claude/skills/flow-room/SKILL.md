@@ -11,10 +11,13 @@ description: Mở dashboard và Phòng 3D để người theo dõi team agent re
    - Dashboard + gate_ui: `http://localhost:8000`
    - Phòng 3D một dự án: `http://localhost:8000/room?project=P-...` (dropdown: chấm xanh = đang live)
    - Danh sách dự án: `http://localhost:8000/api/projects`
-3. Server CHỈ ĐỌC event store (`config/runtime.yaml` / `OA_EVENTSTORE_PATH` — phải trùng file mà
+3. Server ĐỌC event store (ghi duy nhất: người ký gate dự án) (`config/runtime.yaml` / `OA_EVENTSTORE_PATH` — phải trùng file mà
    `src.ops.project` ghi). Dự án chạy ở terminal khác (`python -m src.ops.project run ...`) sẽ hiện LIVE.
-4. **Gate**: người tự xem và ký trên dashboard (gate_ui). Claude không bấm/ký thay, không gọi API ký thay người.
-   Hiện gate_ui chỉ ký board demo DASH; ký gate cho project event store chưa có → nói rõ với người.
+4. **Gate dự án**: tab "Gate dự án" (`http://localhost:8000/?project=P-...`) — người xem dữ liệu trình gate, gõ tên
+   mình + `XAC NHAN`, Duyệt / Trả lại. Đây là endpoint DUY NHẤT của server ghi event store. Phòng 3D hiện gate
+   đang chờ (thanh vàng). **Claude không bấm/ký thay, không gọi `POST /api/projects/*/gate`** (curl/http/WebFetch
+   đều deny), không gõ tên/`XAC NHAN` thay. Đường thứ hai: người tự gõ `python -m src.ops.gate sign|reject ...`
+   trong terminal của họ.
 
 ## Sự cố
 - Phòng 3D trắng: Three.js tải từ CDN `cdn.jsdelivr.net` → mạng công ty chặn thì 3D không vẽ; dashboard

@@ -656,7 +656,7 @@ function renderAgents(){
 function applyState(){
   for (const a of STATE.agents){ const c = chars.get(a.id); if (c) c.setStatus(a.status); }
   const gate = STATE.gate, gb = document.getElementById('gatebar');
-  gb.classList.toggle('show', !!gate); if (gate) gb.textContent = `⏳ ${gate.id} · chờ người duyệt${gate.who?` (${gate.who})`:''} — ký trên Dashboard`;
+  gb.classList.toggle('show', !!gate); if (gate) gb.textContent = `⏳ ${gate.id} · chờ người duyệt${gate.who?` (${gate.who})`:''} — người ký trên Dashboard hoặc terminal của mình`;
   // worker theo trạng thái task: blocked → "!", xong (await_merge/ready/merged) → rời phòng
   const byId = Object.fromEntries(STATE.tasks.map(t=>[t.id,t]));
   for (const [tid,k] of kids){ const t = byId[tid]; if (!t) continue;

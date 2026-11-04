@@ -128,9 +128,14 @@ def test_full_flow_to_released_only_with_human_signatures(db, brief):
 
 
 def test_no_gate_signing_path_in_ops():
+    """Đường ký DUY NHẤT trong src/ops là src/ops/gate.py (người: dashboard / terminal TTY) — test_ops_gate.py."""
     for f in (ROOT / "src/ops").glob("*.py"):
         src = f.read_text(encoding="utf-8")
-        assert ".sign(" not in src and "gate_signatures" not in src, f
+        assert "gate_signatures" not in src, f
+        if f.name != "gate.py":
+            assert ".sign(" not in src, f
+    g = (ROOT / "src/ops/gate.py").read_text(encoding="utf-8")
+    assert g.count(".sign(") - g.count("Blackboard.sign(") == 1 and "b.sign(gate, by=who, via=GATE_UI)" in g
     with pytest.raises(SystemExit):
         project.main(["sign", "--id", "x"])
 

@@ -39,15 +39,37 @@ Phản hồi (qua Chief of Staff): bản zip (git archive) không có `.git` →
 Số test sau vòng 2: **434**.
 
 ## Phát hiện cần chủ repo quyết
-- **Ký gate cho project thật chưa có đường:** `gate_ui` của dashboard ký board demo DASH trong RAM, không ghi `sign`
-  vào event store. Dự án tạo bằng `src.ops.project` sẽ dừng ở `AWAIT_G1`. Test mô phỏng chữ ký người bằng
-  `Blackboard.sign(..., via="gate_ui")` trong test. Bot không tự thêm đường ký (anti-job).
+- ~~**Ký gate cho project thật chưa có đường**~~ → đã làm ở Vòng 3 (chủ repo duyệt 2026-11-04 07:4x).
 - Sau ESCALATED chưa có lệnh gỡ/quay lại — người quyết thiết kế.
 - `run` ghi `architecture` + `task_backlog` hộ runner `b4_tech_lead` (runner không tự ghi), đúng danh tính writer
   zone như `src/demo/dry_run.py`.
 
+## Vòng 3 — người ký gate cho dự án thật (bot "Cổng", 2026-11-04)
+Quyết định của chủ repo (2026-11-04 07:4x, qua Chief of Staff): duyệt 2 đường cho NGƯỜI ký/trả lại G1–G4 của dự án
+trong event store — (1) dashboard gate_ui theo dự án, (2) lệnh terminal tương tác do người tự gõ. Máy/Claude không ký.
+Anti-job giữ: không nới `gates.py`/guard, không đường ký cho máy, không auto-ký, không L3, không nối Huddle tự động,
+không push/PR/remote, không tự điền danh tính người.
+
+| Mục | Đã đổi gì | Vì sao | File chính | Test |
+|---|---|---|---|---|
+| Lõi gate | `src/ops/gate.py`: `view()` (gate đang chờ + dữ liệu trình gate + `packet_hash`), `sign()` / `reject()`: dựng board từ event store, kiểm đúng `AWAIT_Gx` + chưa ký, người ký qua `confirm.require_human` (máy/agent/auto-*/gate_ui → từ chối), kênh ∈ {dashboard, terminal}, `expected_hash` lệch → từ chối. Ký: thử guard của transition "như thể đã ký" (không đổi `gates.py`) → G4 còn finding High/Critical thì không ký; `Blackboard.sign(gate, by=<người>, via="gate_ui")` → event store; trace_log DECISION; duyệt không sửa → `autonomy.record_review` (lỗi log → risk_register), có sửa → `gate_feedback.record_edit`. Trả lại: `Orchestrator.backtrack` + `project_status` + `gate_feedback.record_edit` (có `task_type`) | Một lõi cho cả 2 đường | `src/ops/gate.py`, `src/orchestrator/gate_view.py` (`packet`, `GATE_AGENTS`, `BACKTRACK`, `room_gate`) | 47 (`tests/contract/test_ops_gate.py`) |
+| Chạy lại sau trả lại | `project run` đọc DECISION reject (`rerun=[phase]`) → chạy lại agent của phase đó dù zone đã có, xong ghi `rerun_done` | Không thì `run` quay lại gate ngay với output cũ | `src/ops/pipeline.py` | (trong test_ops_gate) |
+| Dashboard | `GET /api/projects/{id}/gate`; `POST /api/projects/{id}/gate/{gate}/{approve\|reject}` (body: `signer`, `typed_confirm == "XAC NHAN"`, `packet_hash`, `reason`, `backtrack_to`, `edited`, `note`; thiếu XAC NHAN / tên máy → 400, sai gate / hash / guard → 409). Tab "Gate dự án" trong `index.html` (`/?project=P-...`). Endpoint ghi DUY NHẤT của server; test eventstore cập nhật để chỉ cho đúng route này | Đường 1 | `src/server/app.py`, `src/server/static/index.html`, `tests/contract/test_eventstore.py` | |
+| Phòng 3D | Chế độ project hiện gate đang chờ (thanh vàng + agent `waiting_gate`) từ `project_status` cùng store | | `src/orchestrator/room_stream.py`, `room.html` | |
+| Terminal | `python -m src.ops.gate sign\|reject --id --gate [--reason --backtrack-to --edited --note --db]`: bắt `stdin.isatty()`; in tóm tắt + hash; người gõ tên rồi `XAC NHAN`; không nhận tên qua tham số; không TTY / tên máy / gõ sai / EOF / hash đổi giữa chừng → rc 2, không ghi gì. Đã thử với TTY thật (`script`) | Đường 2 | `src/ops/gate.py` | |
+| Chặn Claude | `.claude/settings.json` deny: `python[3] -m src.ops.gate`, `.venv/bin/python -m ...`, `python src/ops/gate.py`, `python -c *src.ops*gate*`, `script`/`expect`/`unbuffer` (giả TTY), curl/wget/http `*api/projects/*/gate*`, WebFetch localhost/127.0.0.1. Skills (flow-new-project, flow-room, chief-daily, flow-daily-report) ghi: tới gate DỪNG, đưa người link/lệnh, không chạy. Test `test_no_gate_signing_path_in_ops` đổi: `.sign(` chỉ được có trong `src/ops/gate.py` | Luật 10 | `.claude/`, `tests/contract/test_ops.py` | |
+| Tài liệu | CLAUDE.md (mục Vận hành, 10 luật giữ nguyên), START_HERE, runbook mục Gate + sự cố, chief-prompt, doctor/report/status/`run` in đúng 2 đường | | | |
+
+Số test sau vòng 3: **481** (434 + 47). `agent_lint --all` 14/14.
+
+Giới hạn đã biết (vòng 3):
+- Chặn Claude là rào cấu hình (settings deny theo mẫu lệnh) + TTY + XAC NHAN, không phải xác thực mật mã: server chạy
+  localhost không đăng nhập; tên người là tên người gõ (không kiểm danh tính thật).
+- Agent chạy lại sau "trả lại" chưa nhận lý do trả lại làm input (schema agent không có trường này). G3 trả lại về BUILD:
+  Dispatcher không đặt lại task đã `await_merge` → chạy lại BUILD hầu như không đổi gì.
+
 ## Việc còn mở
-- Cách người ký gate cho project trong event store (có xác thực người ở server).
+- Đăng nhập / xác thực người ở dashboard nếu mở ra ngoài localhost; đưa lý do trả lại vào input agent; G3 trả lại → đặt lại task.
 - Đặt số `config/budgets.yaml` (per_project_tokens, dispatcher.worker_tokens) sau khi có baseline.
 - Scanner bảo mật thật (sast / dependency / secret) — hiện stub.
 - Vendor Three.js nếu mạng công ty chặn CDN.

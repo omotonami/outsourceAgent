@@ -9,17 +9,12 @@ from src.blackboard.eventstore import EventStore
 from src.blackboard.store import Blackboard
 from src.common import config
 from src.gateway import budget as ledger
-from src.orchestrator import usage
+from src.orchestrator import gate_view, usage
 from src.orchestrator.state_machine import ORDER
 
-GATE_STATES = {"AWAIT_G1": "G1", "AWAIT_G2": "G2", "AWAIT_G3": "G3", "AWAIT_G4": "G4"}
-GATE_SIGNER = {"G1": "Sales Lead (giá)", "G2": "Client + PM (scope)", "G3": "Tech Lead (merge)",
-               "G4": "Tech Lead + bảo mật (release)"}
+GATE_STATES = gate_view.STATE_GATE
+GATE_SIGNER = gate_view.GATE_SIGNER
 TERMINAL = ("RELEASED", "ESCALATED")
-# Khoảng trống đã biết (2026-11-04): gate_ui trên dashboard chỉ ký board demo DASH trong RAM; chưa có
-# đường người ký gate cho project trong event store. KHÔNG tự thêm — chờ chủ repo quyết (runbook).
-GATE_UI_GAP = ("Lưu ý: gate_ui hiện chỉ ký board demo; ký gate cho project trong event store CHƯA có "
-               "— xem docs/ops/runbook-daily.md mục 'Gate'.")
 DASHBOARD = "uvicorn src.server.app:app  →  http://localhost:8000"
 
 

@@ -17,6 +17,7 @@ description: Báo cáo tiến độ hằng ngày các dự án FLOW từ event s
    - Đã xong: … · Kết quả chính: (state từng dự án, token/chi phí) · Cần người quyết / duyệt: (copy mục
      "Việc cần người quyết").
 4. Không tự quyết thay người các mục trong "Việc cần người quyết" (ký gate, ESCALATED, đặt budget, Clarify).
+   Gate: người ký qua dashboard (tab Gate dự án) hoặc tự gõ `python -m src.ops.gate ...`; Claude không chạy.
 
 Chi phí trong báo cáo là ƯỚC TÍNH theo `config/pricing.yaml`, không phải hoá đơn.
 Báo cáo không đổi repo → không cần ghi docs/history.

@@ -38,7 +38,22 @@
       "Bash(gh repo:*)",
       "Bash(git remote add:*)",
       "Read(.env)",
-      "Read(.env.*)"
+      "Read(.env.*)",
+      "Bash(python -m src.ops.gate:*)",
+      "Bash(python3 -m src.ops.gate:*)",
+      "Bash(.venv/bin/python -m src.ops.gate:*)",
+      "Bash(python src/ops/gate.py:*)",
+      "Bash(python3 src/ops/gate.py:*)",
+      "Bash(script:*)",
+      "Bash(expect:*)",
+      "Bash(unbuffer:*)",
+      "Bash(curl *api/projects/*/gate*)",
+      "Bash(wget *api/projects/*/gate*)",
+      "Bash(http *api/projects/*/gate*)",
+      "Bash(python -c *src.ops*gate*)",
+      "Bash(python3 -c *src.ops*gate*)",
+      "WebFetch(domain:localhost)",
+      "WebFetch(domain:127.0.0.1)"
     ]
   }
 }

@@ -1,4 +1,4 @@
-"""CLI dự án: new | run | huddle | list | status.  KHÔNG có lệnh ký gate (gate chỉ qua gate_ui, người).
+"""CLI dự án: new | run | huddle | list | status.  KHÔNG có lệnh ký gate ở đây (người ký qua dashboard hoặc tự gõ `python -m src.ops.gate`).
 
   python -m src.ops.project new --brief brief.yaml [--id P-...] [--db path]
   python -m src.ops.project run --id P-... [--mock]
@@ -158,7 +158,9 @@ def cmd_status(a) -> int:
     d = describe(store, a.id)
     print(json.dumps(d, ensure_ascii=False, indent=2))
     if d["gate_pending"]:
-        print(f"→ Chờ người ký {d['gate_pending']} ({common.GATE_SIGNER[d['gate_pending']]}) trên dashboard.")
+        g = d["gate_pending"]
+        print(f"→ Chờ người ký {g} ({common.GATE_SIGNER[g]}) — dashboard (Gate dự án) hoặc người tự gõ "
+              f"`python -m src.ops.gate sign|reject --id {a.id} --gate {g}`.")
     return 0
 
 

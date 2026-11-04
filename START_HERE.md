@@ -38,8 +38,10 @@ Chạy lại được hôm sau, ở process khác: state dựng lại từ event
 | G2 | Client + PM (scope) | Build |
 | G3 | Tech Lead (merge) | Security |
 | G4 | Tech Lead + bảo mật (release) | Released |
-Chỉ người ký qua dashboard `gate_ui`. CLI không có lệnh ký; Claude không ký thay (CLAUDE.md luật 10).
-**Lưu ý:** hiện gate_ui chỉ ký board demo; ký gate cho project trong event store CHƯA có — xem runbook mục Gate.
+Chỉ NGƯỜI ký/trả lại (CLAUDE.md luật 10) — 2 đường, cùng lõi `src/ops/gate.py`, ghi vào event store:
+1. Dashboard: `uvicorn src.server.app:app` → `http://localhost:8000/?project=P-...` tab **Gate dự án** → gõ tên + `XAC NHAN`.
+2. Terminal của người: `python -m src.ops.gate sign --id P-... --gate G1` (trả lại: `reject ... --reason "..."`).
+Ký xong → `python -m src.ops.project run --id P-...` chạy tiếp. Claude không chạy lệnh/API ký (settings deny).
 
 ## Ranh giới dữ liệu
 - Dữ liệu công ty (brief, spec, code, tên client, event store, báo cáo nội bộ) **ở lại account/máy công ty**.
@@ -48,4 +50,4 @@ Chỉ người ký qua dashboard `gate_ui`. CLI không có lệnh ký; Claude kh
 
 ## Việc người phải tự làm khi cài
 1. Đặt `ANTHROPIC_API_KEY` công ty. 2. Chủ repo đặt số `config/budgets.yaml` (đang null = không trần).
-3. Dán `docs/ops/chief-prompt.md` vào Project "Chief" trên claude.ai công ty. 4. Quyết cách ký gate cho project thật.
+3. Dán `docs/ops/chief-prompt.md` vào Project "Chief" trên claude.ai công ty. 4. Người ký gate biết 2 đường ở trên.

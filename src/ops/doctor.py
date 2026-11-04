@@ -59,7 +59,7 @@ def checks(db: str | None = None) -> list[tuple[str, str, str]]:
     out.append((OK if sk.is_file() else WARN, ".claude/settings.json", "có" if sk.is_file() else "thiếu"))
     out.append((INFO, "Phòng 3D", "Three.js tải từ CDN (cdn.jsdelivr.net) → cần mạng; mạng cty chặn CDN thì "
                 "Phòng 3D không vẽ (dashboard khác vẫn chạy)"))
-    out.append((INFO, "Gate", "chỉ người ký qua gate_ui; CLI không có lệnh ký"))
+    out.append((INFO, "Gate", "chỉ NGƯỜI ký: dashboard (khối Gate dự án) hoặc người tự gõ `python -m src.ops.gate` trong terminal (TTY); Claude không ký"))
     return out
 
 

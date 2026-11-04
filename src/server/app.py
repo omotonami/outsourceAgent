@@ -226,7 +226,7 @@ def _room_levels():
         return {}
 
 
-# ----- Phòng 3D realtime: đọc event store dùng chung (process khác ghi), CHỈ ĐỌC -----
+# ----- Phòng 3D realtime: đọc event store dùng chung (process khác ghi), CHỈ ĐỌC (ghi duy nhất: gate dự án bên dưới) -----
 EVENTSTORE = None     # test thay bằng EventStore(tmp, readonly=True); None → store theo config (readonly)
 
 
@@ -297,6 +297,59 @@ def _dash_usage():
     for e in S.log:
         u.add(e["agent"], e["tier"], e["tok"][0], e["tok"][1])
     return u.to_dict()
+
+
+# ----- Gate dự án thật (event store): NGƯỜI duyệt / trả lại — lõi src/ops/gate.py -----
+# Endpoint DUY NHẤT của server ghi event store. Claude/bot không gọi (.claude/settings.json deny, luật 10).
+GATE_STORE = None     # test thay bằng EventStore(tmp) ghi được; None → store theo config (ghi được)
+GATE_FEEDBACK_LOG = None    # test thay; None → eval/runs/gate_feedback.jsonl
+GATE_ERR_STATUS = {"machine": 400, "input": 400, "missing": 404, "state": 409, "hash": 409, "guard": 409}
+
+
+def _gate_store():
+    return GATE_STORE if GATE_STORE is not None else eventstore.EventStore(eventstore.default_path())
+
+
+@app.get("/api/projects/{pid}/gate")
+def project_gate(pid: str):
+    """Gate đang chờ + dữ liệu trình gate (highlights, zone output, decision_records — không transcript /
+    raw thinking) + packet_hash để gửi lại khi ký."""
+    from src.ops import gate as ops_gate
+    try:
+        return ops_gate.view(_store(), pid)
+    except ops_gate.GateError as e:
+        return JSONResponse({"error": str(e)}, GATE_ERR_STATUS.get(e.kind, 400))
+
+
+@app.post("/api/projects/{pid}/gate/{gid}/{decision}")
+async def project_gate_decide(pid: str, gid: str, decision: str, request: Request):
+    """Body JSON: signer (tên NGƯỜI, bắt buộc), typed_confirm == "XAC NHAN" (bắt buộc), packet_hash (khuyên
+    gửi: dữ liệu đổi → 409), approve: edited, note · reject: reason (bắt buộc), backtrack_to."""
+    from src.ops import gate as ops_gate
+    if decision not in ("approve", "reject"):
+        return JSONResponse({"error": "decision phải là approve | reject"}, 404)
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body phải là JSON object"}, 400)
+    if body.get("typed_confirm") != ops_gate.CONFIRM_WORD:
+        return JSONResponse({"error": f'phải gõ đúng "{ops_gate.CONFIRM_WORD}" vào typed_confirm'}, 400)
+    if not str(body.get("signer") or "").strip():
+        return JSONResponse({"error": "thiếu signer (tên người ký)"}, 400)
+    kw = dict(store=_gate_store(), expected_hash=body.get("packet_hash") or None, autonomy=_autonomy(),
+              feedback_log=GATE_FEEDBACK_LOG)
+    try:
+        if decision == "approve":
+            res = ops_gate.sign(pid, gid, body["signer"], "dashboard", edited=bool(body.get("edited")),
+                                note=body.get("note"), **kw)
+        else:
+            res = ops_gate.reject(pid, gid, body["signer"], "dashboard", body.get("reason"),
+                                  body.get("backtrack_to") or None, **kw)
+    except ops_gate.GateError as e:
+        return JSONResponse({"error": str(e)}, GATE_ERR_STATUS.get(e.kind, 400))
+    return {**res, "view": ops_gate.view(kw["store"], pid)}
 
 
 @app.get("/room", response_class=HTMLResponse)

@@ -26,5 +26,6 @@
 ## Vận hành hằng ngày (Chief)
 - Bắt đầu: `START_HERE.md`. Lịch một ngày + xử lý sự cố: `docs/ops/runbook-daily.md`.
 - Skills: `.claude/skills/` — `chief-daily` (tổng), `flow-new-project`, `flow-daily-report`, `flow-room`, `flow-new-bot`.
-- CLI: `python -m src.ops.project|report|prune|doctor`. Không có lệnh ký gate; gate chỉ người ký qua `gate_ui`.
+- CLI: `python -m src.ops.project|report|prune|doctor`. Gate G1–G4 chỉ NGƯỜI ký (luật 10), 2 đường: dashboard tab
+  "Gate dự án" hoặc người tự gõ `python -m src.ops.gate sign|reject` (bắt TTY). Claude KHÔNG chạy lệnh/API ký.
 - Dữ liệu công ty ở lại account công ty; ra ngoài chỉ bản `report daily --redact`.

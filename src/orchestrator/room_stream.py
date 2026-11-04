@@ -7,6 +7,7 @@ room_state.snapshot (chỉ summary của Team feed, không raw thinking/prompt/c
     .snapshot(levels, limit)           payload như GET /api/room + {project, seq}
     .poll(levels) → [frame]            dòng mới (seq > last) → frame
   frame = {seq, ts, project, events:[room event + seq], agents, tasks, gate, usage}
+          gate = {id, agents, who} khi project_status.state = AWAIT_Gx (src/orchestrator/gate_view.room_gate)
           chỉ sinh khi có event mới hoặc agents/tasks/usage đổi (dòng không ảnh hưởng view bị bỏ qua)
   usage = token đã đốt (src/orchestrator/usage.py) từ dòng llm_usage của trace gateway — chỉ số liệu
   stream(...)                          async generator SSE (id = seq, event: room|snapshot, heartbeat)
@@ -21,7 +22,7 @@ from typing import Awaitable, Callable
 
 from src.blackboard.proxy import ReadOnlyBoard
 from src.blackboard.store import Blackboard
-from src.orchestrator import room_state, usage
+from src.orchestrator import gate_view, room_state, usage
 
 FRAMES_MAX = 5000
 # project_status.phase/state (tên phase dự án hoặc chữ cái) → phase của phòng
@@ -56,8 +57,11 @@ class RoomFeed:
         return self.usage.to_dict(self._price, self._budget)
 
     def _snap(self, levels=None, limit=None) -> dict:
-        return {**room_state.snapshot(self._view, levels=levels, limit=limit, meta=self.meta),
-                "usage": self.usage_dict()}
+        gate = gate_view.room_gate(self._view)           # gate đang chờ theo project_status (cùng nguồn store)
+        snap = room_state.snapshot(self._view, gate=gate, levels=levels, limit=limit, meta=self.meta)
+        if gate and snap["gate"]:
+            snap["gate"]["who"] = gate["who"]
+        return {**snap, "usage": self.usage_dict()}
 
     def snapshot(self, levels=None, limit: int | None = room_state.EVENT_LIMIT) -> dict:
         return {**self._snap(levels, limit), "project": self.project_id, "seq": self.last}

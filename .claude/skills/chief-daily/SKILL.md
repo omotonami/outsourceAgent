@@ -29,7 +29,9 @@ Runbook đầy đủ: `docs/ops/runbook-daily.md`.
 (`--closed-project`) **chỉ khi người đã quyết** xoá hay trả dữ liệu client.
 
 ## Điểm PHẢI DỪNG hỏi người
-- Mọi gate G1–G4 (người ký qua gate_ui; Claude không ký, không lách).
+- Mọi gate G1–G4: DỪNG, báo người mở dashboard (tab Gate dự án) hoặc tự gõ
+  `python -m src.ops.gate sign|reject --id P-... --gate Gx` trong terminal CỦA HỌ. Claude không chạy lệnh ký,
+  không gọi API ký, không gõ tên/`XAC NHAN` thay, không lách (luật 10, settings deny).
 - ESCALATED, BLOCKED do guard, vượt budget.
 - Xác nhận Factory (người gõ trong terminal), sửa `specs/` hoặc `config/`, đặt số budget/rate.
 - Đưa bất kỳ dữ liệu nào ra ngoài account công ty — chỉ bản `report --redact`, sau khi đã đọc lại.

@@ -162,8 +162,10 @@ def test_denied_writes_never_reach_store(store):
         WorkerBoard(b, ["c1_dev"], cancelled=lambda: True).append("risk_register", {"risk": "x"}, agent="c1_dev")
     b.revoke_signature("G9", "không có", by="pm")                         # không có chữ ký → không ghi
     assert store.read(pid) == []
-    assert all(r.methods <= {"GET", "HEAD"} for r in srv.app.routes                 # endpoint mới chỉ đọc
-               if getattr(r, "path", "").startswith(("/api/room", "/api/projects")))
+    # endpoint room/projects chỉ đọc; ngoại lệ DUY NHẤT: người ký gate dự án (src/ops/gate.py, 2026-11-04)
+    writers = [r.path for r in srv.app.routes if getattr(r, "path", "").startswith(("/api/room", "/api/projects"))
+               and not r.methods <= {"GET", "HEAD"}]
+    assert writers == ["/api/projects/{pid}/gate/{gid}/{decision}"]
 
 
 def test_store_failure_leaves_ram_unchanged(store):

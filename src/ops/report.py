@@ -126,7 +126,7 @@ class ProjectReport:
         out = []
         _, gate = self.gates()
         if gate:
-            out.append(f"Ký {gate} ({common.GATE_SIGNER[gate]}) qua dashboard gate_ui — người, không phải bot.")
+            out.append(f"Ký {gate} ({common.GATE_SIGNER[gate]}) qua dashboard (Gate dự án) hoặc người tự gõ `python -m src.ops.gate sign|reject --id ... --gate ...` — người, không phải bot.")
         if self.state == "ESCALATED":
             out.append("Dự án ESCALATED — người quyết hướng xử lý.")
         bt = self.blocked_tasks()

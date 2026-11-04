@@ -4,7 +4,10 @@
   process / nhiều ngày. Mỗi bước idempotent: zone đã có thì không gọi lại agent đó.
 - Agent gọi qua runner trong src/agents/ (→ gateway). BUILD dùng Dispatcher. Huddle KHÔNG chạy ở đây
   (chỉ khi người gọi `project huddle`, quyết định chủ repo).
-- Gate: chỉ ĐỌC chữ ký (board.is_signed). Module này không có đường ký gate (luật 10, specs/06_gates.md).
+- Gate: chỉ ĐỌC chữ ký (board.is_signed). Module này không có đường ký gate (luật 10, specs/06_gates.md);
+  người ký/trả lại qua src/ops/gate.py (dashboard hoặc terminal tương tác do người gõ).
+- Gate bị trả lại (trace_log DECISION decision=reject, rerun=[phase...]): chạy lại agent của các phase đó dù
+  zone đã có; xong phase → ghi DECISION decision=rerun_done.
 - Escalate: agent fail schema (escalate=True) hoặc vượt budget → Orchestrator.escalate → ESCALATED.
 - BLOCKED: guard từ chối / Dispatcher còn task blocked / lỗi môi trường → dừng, ghi sự kiện BLOCKED vào
   trace_log (writer orchestrator), state giữ nguyên để chạy lại sau khi người xử lý.
@@ -45,9 +48,10 @@ class Outcome:
 
     def human_todo(self) -> list[str]:
         if self.stop == "AWAIT_GATE":
-            return [f"Người ({common.GATE_SIGNER[self.gate]}) xem và ký {self.gate} trên dashboard gate_ui "
-                    f"({common.DASHBOARD}). CLI/bot KHÔNG ký thay.",
-                    common.GATE_UI_GAP,
+            return [f"Người ({common.GATE_SIGNER[self.gate]}) xem và duyệt/trả lại {self.gate}: dashboard "
+                    f"({common.DASHBOARD}, khối 'Gate dự án') hoặc TỰ GÕ trong terminal của mình: "
+                    f"`python -m src.ops.gate sign|reject --id {self.project_id} --gate {self.gate}`. "
+                    "Claude/bot KHÔNG ký thay, không chạy lệnh ký.",
                     f"Ký xong: chạy lại `python -m src.ops.project run --id {self.project_id}`."]
         if self.stop == "ESCALATED":
             return [f"Dự án ESCALATED: {self.reason}. Người xem risk_register (report daily) và quyết "
@@ -73,6 +77,7 @@ class Runner:
         common.seed_ledger(store, pid)
         self.orch = Orchestrator(self.board, common.state_of(self.board))
         self.ran: list[str] = []
+        self.force = self._pending_rerun()
 
     # ---------- tiện ích ----------
     def _kw(self) -> dict:
@@ -91,8 +96,23 @@ class Runner:
             raise Blocked(f"guard từ chối ở {self.orch.state}: {e}") from e
         self._status()
 
+    def _pending_rerun(self) -> set[str]:
+        """Phase phải chạy lại vì gate bị người trả lại (src/ops/gate.reject), chưa có rerun_done."""
+        todo: set[str] = set()
+        for e in self.board.get("trace_log") or []:
+            if e.get("event") != "DECISION" or e.get("by") != "orchestrator.gate":
+                continue
+            if e.get("decision") == "reject":
+                todo |= set(e.get("rerun") or [])
+            elif e.get("decision") == "rerun_done":
+                todo.discard(e.get("phase_state"))
+        return todo
+
+    def _fresh(self, zone: str) -> bool:
+        return self.board.get(zone) is not None and self.orch.state not in self.force
+
     def _agent(self, zone: str, agent: str, fn) -> None:
-        if self.board.get(zone) is not None:
+        if self._fresh(zone):
             return
         _check(fn(), agent)
         self.ran.append(agent)
@@ -123,7 +143,7 @@ class Runner:
         self._agent("design_spec", "b2_ux", lambda: b2_ux.run(b, USER, self._ctx(), {"stories": stories}, **kw))
         self._agent("ui_system", "b3_ui", lambda: b3_ui.run(
             b, USER, self._ctx(), {"design_spec": b.get("design_spec"), "stories": stories}, **kw))
-        if b.get("task_backlog") is None:
+        if not self._fresh("task_backlog"):
             res = _check(b4_tech_lead.run(b, USER, self._ctx(), {
                 "stories": stories, "screens": (b.get("design_spec") or {}).get("screens", [])}, **kw),
                 "b4_tech_lead")
@@ -148,7 +168,7 @@ class Runner:
         from src.agents import d1_soc
         from src.tools.security import dependency_scan, sast, secret_scan
         b = self.board
-        if b.get("security_report") is not None:
+        if self._fresh("security_report"):
             return
         raw, missing = [], []
         for name, tool in (("sast", sast), ("dependency_scan", dependency_scan), ("secret_scan", secret_scan)):
@@ -185,6 +205,10 @@ class Runner:
                     self._advance()
                     continue
                 getattr(self, self.PHASES[s])()
+                if s in self.force:
+                    events.emit(self.board, "DECISION", writer=WRITER, by="orchestrator.gate",
+                                decision="rerun_done", phase_state=s, reason=f"đã chạy lại {s} sau khi gate bị trả lại")
+                    self.force.discard(s)
                 self._advance()
         except (Escalate, ledger.BudgetExceeded) as e:
             reason = str(e) if isinstance(e, Escalate) else f"vượt budget: {e}"

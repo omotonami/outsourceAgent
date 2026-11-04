@@ -45,7 +45,7 @@ def client(monkeypatch, db, tmp_path):
     monkeypatch.setattr(srv, "AUTONOMY", Autonomy(state_path=tmp_path / "ax.json", reviews_log=tmp_path / "rv.jsonl"))
     monkeypatch.setattr(control, "COS_SENDER", mock.sender)
     control.RATE.reset()
-    return tc.TestClient(srv.app)
+    return tc.TestClient(srv.app, base_url="http://localhost")
 
 
 def _new(db, pid, state="INTAKE"):
@@ -87,7 +87,8 @@ def test_cos_chat_mock_returns_five_sections_without_writing(client, db):
     new = _rows(db)[n:]
     assert {x.zone for x in new} <= {"llm_usage"}                 # chỉ số liệu token, không zone nào
     assert client.post("/api/cos/chat", json={"message": ""}).status_code == 400
-    assert client.post("/api/cos/chat", content=b"x").status_code == 400
+    assert client.post("/api/cos/chat", content=b"x",
+                       headers={"Content-Type": "application/json"}).status_code == 400
     assert client.post("/api/cos/chat", json={"message": "x", "project": "P-NONE"}).status_code == 404
 
 
@@ -325,3 +326,33 @@ def test_cos_model_unavailable_shows_claude_code_message(client, monkeypatch):
     r = client.post("/api/cos/brief", json={"client": "A", "source": "e", "content": "x"})
     assert r.status_code == 200 and r.json()["cos"]["error"] == "NOT_READY" and "sk-xxx" not in r.text
     assert "API key" not in client.get("/").text and "ANTHROPIC" not in client.get("/").text
+
+
+# ---------- merge fix/field-events: endpoint ghi của Control Room cũng qua chốt Host/Origin + Content-Type ----------
+CR_WRITES = ["/api/cos/chat", "/api/cos/brief", "/api/cos/brief/confirm", "/api/projects/{pid}/side-tasks"]
+
+
+@pytest.mark.parametrize("path", CR_WRITES)
+@pytest.mark.parametrize("base,headers,code", [
+    ("http://evil.example", {}, 403),
+    ("http://localhost", {"Origin": "http://evil.example"}, 403),
+    ("http://localhost", {"Origin": "null"}, 403),
+    ("http://localhost", {"Content-Type": "text/plain"}, 415),
+    ("http://localhost", {"Content-Type": "application/x-www-form-urlencoded"}, 415),
+])
+def test_control_room_writes_refuse_bad_host_origin_content_type(client, db, path, base, headers, code):
+    from src.server import app as srv
+    tc = pytest.importorskip("fastapi.testclient")
+    _new(db, "P-W")
+    n = len(_rows(db))
+    body = {"message": "x", "role": "c1_dev", "title": "t", "confirmed_by": "Lan Nguyen", "typed_confirm": "XAC NHAN"}
+    r = tc.TestClient(srv.app, base_url=base).post(path.format(pid="P-W"), content=json.dumps(body),
+                                                   headers={"Content-Type": "application/json", **headers})
+    assert r.status_code == code, r.text
+    assert len(_rows(db)) == n                                    # bị chặn trước handler: không ghi gì
+
+
+def test_control_room_ui_posts_json():
+    html = (ROOT / "src/server/static/control.html").read_text(encoding="utf-8")
+    assert "headers:{'Content-Type':'application/json'}" in html and "JSON.stringify(body)" in html
+    assert html.count("method:'POST'") == 1                       # mọi POST đi qua helper post() gửi JSON

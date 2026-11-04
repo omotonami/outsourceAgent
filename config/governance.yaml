@@ -1,0 +1,11 @@
+# Governance — danh tính KHÔNG phải người (src/governance/confirm.py). Lớp CHỐNG DÙNG NHẦM (bot/agent tự điền
+# tên mình vào confirmed_by / approved_by / reviewer / signer), KHÔNG phải xác thực: người cố ý gõ tên giả vẫn
+# qua được — xác nhận người thật dựa vào kênh (gate_ui / terminal TTY do người gõ, CLAUDE.md luật 10).
+# Mục ở đây CỘNG THÊM vào danh sách dựng từ specs (writer zone, agent id) + danh sách cố định trong code.
+# So sánh sau chuẩn hoá: bỏ ký tự Unicode Cf (zero-width…), NFKC, casefold, tách theo : - _ . @ / khoảng trắng;
+# dạng viết liền (bỏ dấu phân cách) cũng bị bắt (vd "chief ops", "chiefops").
+confirm:
+  machine_ids_extra:
+    - soi          # bot review (Chief tạo)
+    - va           # bot sửa review ("Vá")
+    - chief-of-staff

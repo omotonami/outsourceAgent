@@ -330,9 +330,9 @@ class Runner:
         return self._out("BLOCKED", reason=reason)
 
     def _last_escalation(self) -> str | None:
-        rr = [r for r in team_feed.open_risks(self.board.get("risk_register"))
-              if r.get("source_agent") == "orchestrator"]
-        return rr[-1]["risk"] if rr else None
+        rr = self.board.get("risk_register") or []
+        i = team_feed.open_escalation_index(rr)
+        return rr[i]["risk"] if i is not None else None
 
     def _out(self, stop: str, gate: str | None = None, reason: str | None = None) -> Outcome:
         return Outcome(self.pid, self.orch.state, stop, gate=gate, reason=reason, ran=list(self.ran))

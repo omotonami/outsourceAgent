@@ -73,5 +73,38 @@ Số test sau đợt: **573**.
 - Chat CoS không gắn dự án: token không vào event store (không có project); gắn dự án thì vào `llm_usage` của dự án đó.
 - BUILD giữ cả C1–C3 cho một dự án trong suốt lượt Dispatcher (đơn giản, an toàn); chia nhỏ theo task nếu cần.
 - Việc phụ kind=main không chặn cứng việc chính của pipeline (chỉ chặn việc phụ cùng role).
-- Test cũ `test_dispatcher.py::test_invalid_contract_not_spawned` chập chờn ~1/6 lần cả ở `a4d041e` (không do đợt này).
+- ~~Test cũ `test_dispatcher.py::test_invalid_contract_not_spawned` chập chờn~~ → đã sửa ở mục Gộp `fix/field-events` dưới.
 - Server localhost không đăng nhập: ai mở được trang là gõ được tên (như gate) — rào cấu hình + XAC NHAN, không phải xác thực.
+
+## Gộp `fix/field-events` (review PR #2) vào `feat/control-room` (bot "Nối")
+`git merge origin/fix/field-events` (5f08112: a4d041e + 7 commit sửa review) vào 9783640.
+
+| Xung đột / chỗ ghép | Cách giải (giữ ý đồ cả hai) |
+|---|---|
+| `config/runtime.yaml` | `schema_retries: 2` (Control Room, chủ repo duyệt) + khoá mới của review: `extract_max_chars`, `extract_max_candidates`, `dashboard.allowed_hosts`; `eventstore.assign_stale_s` (tự gộp) |
+| `src/orchestrator/room_state.py` | `snapshot`: `step_status(state, now, window_s=assign_stale_s)` (review: bỏ working kẹt khi gate/terminal/ASSIGN quá hạn) + `step_kinds` (main/side) + tham số `meta` đa dự án |
+| `docs/history/README.md` | giữ dòng field-fixes bản review (→ 676) + dòng Control Room |
+| `.claude/settings.json` (tự gộp) | hợp nhất: allow pytest chỉ `pytest -q tests/`; ask `tests/**`; deny gồm cả `git diff --no-index*` (review) và `api/cos/brief/confirm`, `side-tasks` (Control Room) — giữ mức chặt hơn |
+| `src/server/app.py` (tự gộp) | chốt ghi là middleware cấp app → router `control.py` (`/api/cos/chat`, `/api/cos/brief`, `/api/cos/brief/confirm`, `/api/projects/{pid}/side-tasks`) cũng qua kiểm Host/Origin (403) + Content-Type JSON (415); `control.html` gửi mọi POST qua helper `post()` JSON |
+
+Sửa sau gộp (xung đột ngữ nghĩa):
+- `tests/contract/test_control_room.py`: TestClient `base_url="http://localhost"` (như hạ tầng review); body không phải JSON
+  gửi kèm `Content-Type: application/json` để vẫn kiểm 400. Test mới: 4 endpoint ghi Control Room × 5 ca Host/Origin/
+  Content-Type sai → 403/415 và không ghi event; UI POST JSON.
+- `tests/contract/test_runtime_extract_review.py`: số output sai = `1 + runtime.schema_retries()` (review viết khi =1).
+- Test chập chờn `test_dispatcher.py::test_invalid_contract_not_spawned` — nguyên nhân: sổ zombie là cấp module;
+  `test_ttl_kill_blocks_task` cùng pid `p-h2`, cùng task id `A` để lại zombie "A" khi thread chưa kịp thoát (máy tải
+  nặng) → `_mark_ready` loại "A" vì bận, nhưng "A" không vào `waiting` nên `run()` thoát luôn, "A" ở pending thay vì
+  blocked. Tái hiện chắc chắn bằng worker ngủ 0,3 s sau cancel. Sửa test (không đụng dispatcher): pid riêng cho hai
+  test + test ttl chờ zombie của nó dừng (`_wait_no_zombies`). Hành vi scheduler (task trùng id với zombie bị bỏ qua
+  im lặng, không chờ/escalate) ghi vào việc còn mở để chủ repo quyết.
+
+Kiểm: `pytest -q` **725** pass (676 + 28 Control Room + 21 mới), chạy cả bộ 10 lần liền xanh; `test_dispatcher.py`
+10 lần liền xanh; `agent_lint --all` 14/14; `history_check --base origin/main` PASS.
+Playwright (MOCK=1 uvicorn + `scheduler run --mock`, store `/tmp`, 3 dự án + 1 ESCALATED thêm): chat CoS trả 5 mục;
+Giao việc → XAC NHAN tạo dự án; tab Sự cố retry → 200, scheduler chạy tiếp tới G1; 0 lỗi console, 0 phản hồi 403/415.
+Ảnh: `/home/claude/control-desktop.png`, `/home/claude/control-mobile.png`.
+
+Việc còn mở (chủ repo quyết):
+- Dispatcher: task ready trùng id với zombie còn sống của cùng dự án bị bỏ qua im lặng (không vào `waiting` → không
+  `_wait_zombies`/escalation). Đề xuất: tính là waiting. Chưa sửa vì ngoài phạm vi gộp.

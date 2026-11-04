@@ -37,5 +37,5 @@ class Orchestrator:
 
     def escalate(self, reason: str) -> None:
         self.board.append("risk_register", {"risk": reason, "source_agent": "orchestrator",
-                                            "severity": "High", "status": "open"}, agent="orchestrator")
+                                            "kind": "escalation", "severity": "High", "status": "open"}, agent="orchestrator")
         self.state = "ESCALATED"

@@ -116,7 +116,7 @@ def test_retry_count_from_config(monkeypatch):
     def fake(rel, root=None):
         d = real(rel, root)
         if str(rel) == runtime.RUNTIME_CFG:
-            d = {**d, "agent_runtime": {"schema_retries": 3}}
+            d = {**d, "agent_runtime": {**d["agent_runtime"], "schema_retries": 3}}
         return d
     monkeypatch.setattr(config, "load_yaml", fake)
     seen = []

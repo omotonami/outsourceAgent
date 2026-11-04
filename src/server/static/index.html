@@ -89,7 +89,7 @@ const TIER={haiku:"var(--haiku)",sonnet:"var(--sonnet)",opus:"var(--opus)"};
 const PHASES={A:"Pre-sales",B:"Discovery & Design",C:"Build",D:"Security & Release"};
 let playing=false, timer=null;
 const $=id=>document.getElementById(id);
-async function api(p,m="GET"){const r=await fetch(p,{method:m});return r.json();}
+async function api(p,m="GET"){const o={method:m};if(m!=="GET"){o.headers={"Content-Type":"application/json"};o.body="{}";}const r=await fetch(p,o);return r.json();}
 function render(s){
   const cur=s.steps[s.i];
   // rail

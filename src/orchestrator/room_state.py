@@ -16,8 +16,10 @@ worker (c1_dev → c2_tester → c3_qc, xem dispatcher/worker.py) thì testing �
 """
 from __future__ import annotations
 
+import time
+
 from src.common import config
-from src.orchestrator import team_feed
+from src.orchestrator import gate_view, team_feed
 from src.orchestrator.dispatcher.settings import BLOCKED, DEFAULT_AGENT, PARENT, WORKER_STATES
 from src.orchestrator.events import EventType
 
@@ -153,11 +155,25 @@ ESCALATION_BY = "orchestrator.escalation"   # src/ops/escalation.py: người g�
 ESCALATION_RESOLVE = ("retry", "backtrack", "abandon")
 
 
-def step_status(board) -> dict:
+TERMINAL_STATES = ("RELEASED", "ESCALATED", "ABANDONED")
+
+
+def assign_stale_s(root=None) -> float:
+    """eventstore.assign_stale_s (config/runtime.yaml) — ASSIGN cũ hơn mức này không còn tính 'working'.
+    Khác live_window_s (nghĩa "dự án live"): lượt gọi model có thể kéo dài vài phút."""
+    from src.blackboard import eventstore
+    return float(config.require(eventstore.settings(root), "assign_stale_s", eventstore.RUNTIME))
+
+
+def step_status(board, *, state: str | None = None, now: float | None = None,
+                window_s: float | None = None) -> dict:
     """agent → working | blocked theo bước phase (trace_log, task_id rỗng — src/ops/pipeline.assign/finish):
     ASSIGN chưa có RESULT/BLOCKED → working; BLOCKED cuối → blocked (tới ASSIGN kế tiếp hoặc người gỡ
-    ESCALATED); RESULT → hết (idle)."""
+    ESCALATED); RESULT → hết (idle).
+    'working' bị bỏ (review PR #2 — process chết giữa chừng không để agent 'đang làm' mãi) khi: `state` là
+    state chờ gate / terminal, hoặc ASSIGN cũ hơn `window_s` (eventstore.assign_stale_s) so với `now` (truyền cả hai mới xét)."""
     st: dict = {}
+    since: dict = {}
     for e in board.get("trace_log") or []:
         kind = str(e.get("event") or "").upper()
         if kind == EventType.DECISION and e.get("by") == ESCALATION_BY and e.get("decision") in ESCALATION_RESOLVE:
@@ -167,11 +183,18 @@ def step_status(board) -> dict:
             continue
         if kind == EventType.ASSIGN:
             st[e["agent"]] = "working"
+            since[e["agent"]] = e.get("ts")
         elif kind == EventType.RESULT:
             st.pop(e["agent"], None)
         elif kind == EventType.BLOCKED:
             st[e["agent"]] = "blocked"
-    return st
+    stopped = state in gate_view.STATE_GATE or state in TERMINAL_STATES
+
+    def stale(a):
+        ts = since.get(a)
+        return (now is not None and window_s is not None and isinstance(ts, (int, float))
+                and now - ts > window_s)
+    return {a: s for a, s in st.items() if not (s == "working" and (stopped or stale(a)))}
 
 
 def step_kinds(board) -> dict:
@@ -199,17 +222,22 @@ def agent_meta(root=None) -> list[dict]:
 
 
 def snapshot(board, *, active=(), gate: dict | None = None, levels: dict | None = None,
-             limit: int | None = EVENT_LIMIT, root=None, meta: list[dict] | None = None) -> dict:
+             limit: int | None = EVENT_LIMIT, root=None, meta: list[dict] | None = None,
+             now: float | None = None, window_s: float | None = None) -> dict:
     """Payload GET /api/room. `active`: agent đang chạy bước hiện tại (caller biết, vd dashboard demo);
     `gate`: {id, agents} khi đang chờ người ký; `levels`: agent → 'L0'..'L2' (Autonomy, nếu có);
-    `meta`: kết quả agent_meta() dựng sẵn (không thì đọc specs)."""
+    `meta`: kết quả agent_meta() dựng sẵn (không thì đọc specs).
+    `now`/`window_s`: mốc xét ASSIGN quá hạn (mặc định time.time() / eventstore.assign_stale_s); state lấy từ
+    project_status.state của board."""
     ts = tasks(board)
     evs = events(board)
     if limit:
         evs = evs[-int(limit):]
     gate_agents = set((gate or {}).get("agents") or [])
     risk_blocked = _risk_blocked_agents(board)
-    steps = step_status(board)
+    state = (board.get("project_status") or {}).get("state")
+    steps = step_status(board, state=state, now=time.time() if now is None else now,
+                        window_s=assign_stale_s(root) if window_s is None else window_s)
     kinds = step_kinds(board)
     agents = []
     for a in (meta if meta is not None else _agent_meta(root)):

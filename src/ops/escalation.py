@@ -53,9 +53,7 @@ class EscalationError(Exception):
 def _escalation(store, pid: str, b) -> dict:
     """{reason, risk_index, from_state, agent} của lần escalate đang mở."""
     rr = b.get("risk_register") or []
-    done = team_feed.resolved_indexes(rr)
-    idx = next((i for i in range(len(rr) - 1, -1, -1)
-                if rr[i].get("source_agent") == "orchestrator" and team_feed.is_open_risk(rr[i], i in done)), None)
+    idx = team_feed.open_escalation_index(rr)      # theo kind "escalation" (dữ liệu cũ: xem is_escalation_risk)
     dec = None
     for e in b.get("trace_log") or []:
         if e.get("event") == "DECISION" and e.get("by") == pipeline.BY and e.get("decision") == "escalate":
@@ -80,9 +78,28 @@ def _agent_ids() -> set[str]:
     return set(config.agent_ids()) | {"dispatcher"}
 
 
-def _options(esc: dict) -> list[str]:
+def _gates_before(state: str) -> list[str]:
+    """Gate có state chờ đứng trước `state` trong ORDER (vd SECURITY → G1, G2, G3)."""
+    return [g for st, g in gate_view.STATE_GATE.items() if ORDER.index(st) < ORDER.index(state)]
+
+
+def _reachable(b, state: str) -> bool:
+    """Phase `state` từng mở được: mọi gate phía trước đã ký (còn hiệu lực)."""
+    return all(b.is_signed(g) for g in _gates_before(state))
+
+
+def _backtrack_targets(esc: dict, b=None) -> list[str]:
+    """Phase được backtrack tới. Biết phase lỗi → phase ≤ phase lỗi. KHÔNG rõ phase lỗi (dữ liệu cũ) →
+    chỉ phase mà mọi gate phía trước đã ký (không mở phase dự án chưa từng tới — review PR #2)."""
     frm = esc["from_state"]
-    back = [s for s in WORK if frm is None or ORDER.index(s) <= ORDER.index(frm)]
+    if frm is not None:
+        return [s for s in WORK if ORDER.index(s) <= ORDER.index(frm)]
+    return [s for s in WORK if b is not None and _reachable(b, s)]
+
+
+def _options(esc: dict, b=None) -> list[str]:
+    frm = esc["from_state"]
+    back = _backtrack_targets(esc, b)
     return (["retry"] if frm else []) + [f"backtrack:{s}" for s in back] + ["abandon"]
 
 
@@ -100,7 +117,7 @@ def view(store, pid: str) -> dict:
     if st != ESCALATED:
         return out
     esc = _escalation(store, pid, b)
-    return {**out, **esc, "options": _options(esc), "packet_hash": confirm.payload_hash(_packet(pid, st, esc))}
+    return {**out, **esc, "options": _options(esc, b), "packet_hash": confirm.payload_hash(_packet(pid, st, esc))}
 
 
 # ---------- lõi ----------
@@ -148,8 +165,11 @@ def resolve(project_id: str, action: str, signer, via: str, note: str | None = N
         new = frm
         fields = {"agent": esc["agent"], "signals": list(RETRY_SIGNALS), "retry_state": frm}
     elif kind == "backtrack":
-        if frm and ORDER.index(to) > ORDER.index(frm):
-            raise EscalationError(f"backtrack chỉ về phase ≤ phase lỗi {frm}: {_options(esc)}")
+        if to not in _backtrack_targets(esc, b):
+            why = (f"chỉ về phase ≤ phase lỗi {frm}" if frm else
+                   "không rõ phase lỗi — chỉ phase mà mọi gate phía trước đã ký")
+            raise EscalationError(f"backtrack tới {to} bị từ chối: {why}: {_options(esc, b)}",
+                                  "state" if not frm else "input")
         orch = Orchestrator(b, ESCALATED)
         try:
             orch.backtrack(to, reason=f"gỡ ESCALATED → {to}" + (f": {note}" if note else ""), by=who)

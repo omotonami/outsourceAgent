@@ -80,6 +80,16 @@ deny `python -m src.ops.escalation` (mọi biến thể đã biết) và curl/wg
 | Factory `--write` từ chối | Không có TTY (Claude chạy) | Đúng thiết kế: người tự chạy trong terminal của họ. |
 | `src.ops.gate` / dashboard gate từ chối | Không TTY, tên máy, gõ sai `XAC NHAN`, sai gate (đã ký/đã đi tiếp), dữ liệu đổi | Đọc thông báo; tải lại dashboard / chạy lại lệnh. "đã được ký" → chạy `project run`. |
 
+## Quyền Claude (`.claude/settings.json`) — chỉ là lớp PHỤ (review PR #2, 2026-11-04)
+- pytest: chỉ allow đúng `pytest -q tests/` và `python -m pytest -q tests/`; mọi dạng khác (thêm `-p`, `--rootdir`,
+  `-c`, file ngoài `tests/`…) không có trong allow → Claude Code hỏi người (ask mặc định). Không đặt `pytest:*` vào
+  `ask` vì ask được ưu tiên hơn allow (sẽ hỏi cả lệnh chuẩn).
+- Sửa/viết `tests/**` → ask (test là bằng chứng; bot không lặng lẽ sửa test cho xanh — luật 4/8).
+- Deny `git diff --no-index*` (đọc file bất kỳ ngoài repo, vd `.env`, qua `git diff`).
+- **Deny/ask chỉ là lớp phụ**: so khớp chuỗi lệnh, lách được bằng biến thể (khoảng trắng, alias, script trung gian).
+  Lớp chính: TTY do người gõ + kiểm danh tính người (`src/governance/confirm.py` — chống dùng nhầm, không phải xác
+  thực) + server chỉ nhận ghi JSON từ Host/Origin cục bộ (`dashboard.allowed_hosts`) + review người trước merge.
+
 ## Ranh giới dữ liệu
 - Ở lại account công ty: brief (`data/runtime/briefs/`), event store, `eval/runs/` (trace token), `docs/reports/` (bản nội bộ).
 - Ra ngoài: chỉ `report daily --redact` (bỏ tên client, brief, nội dung zone sản phẩm, text risk/câu hỏi, đường dẫn file;

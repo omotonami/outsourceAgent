@@ -75,15 +75,47 @@ def is_open_risk(r: dict, resolved: bool = False) -> bool:
     return not resolved and str(r.get("status") or "open").lower() not in _CLOSED
 
 
+RESOLVER_SOURCE = "gate_ui"     # kênh người duy nhất được đóng risk bằng bản ghi resolution
+
+
+def is_resolution(r) -> bool:
+    """Bản ghi resolution HỢP LỆ: {resolves: <int>} do kênh người ghi (source_agent == gate_ui — Blackboard.append
+    ép source_agent = writer thật) và resolved_by là NGƯỜI (confirm.is_human). Agent tự append {"resolves": i}
+    (vd từ output model) KHÔNG đóng được risk."""
+    from src.governance import confirm
+    if not isinstance(r, dict):
+        return False
+    i = r.get("resolves")
+    return (isinstance(i, int) and not isinstance(i, bool) and r.get("source_agent") == RESOLVER_SOURCE
+            and confirm.is_human(r.get("resolved_by")))
+
+
 def resolved_indexes(entries) -> set[int]:
     """risk_register append-only: người đổi trạng thái bằng cách APPEND bản ghi {resolves: <chỉ số>, status:
-    resolved, resolved_by: <người>, ...} (src/ops/escalation.py). Trả tập chỉ số đã được giải quyết."""
-    out = set()
-    for r in entries or []:
-        i = r.get("resolves") if isinstance(r, dict) else None
-        if isinstance(i, int) and not isinstance(i, bool):
-            out.add(i)
-    return out
+    resolved, resolved_by: <người>, ...} qua gate_ui (src/ops/escalation.py). Trả tập chỉ số đã được giải quyết
+    — chỉ tính bản ghi hợp lệ (is_resolution)."""
+    return {r["resolves"] for r in entries or [] if is_resolution(r)}
+
+
+ESCALATION_KIND = "escalation"     # Orchestrator.escalate gắn kind; dữ liệu cũ không có kind
+
+
+def is_escalation_risk(r) -> bool:
+    """Risk do Orchestrator.escalate ghi. Mới: kind == "escalation". Dữ liệu cũ (chưa có kind): source_agent
+    orchestrator và không có `phase`/`kind` (risk khác của orchestrator, vd scanner stub, có phase)."""
+    if not isinstance(r, dict):
+        return False
+    if "kind" in r:
+        return r.get("kind") == ESCALATION_KIND
+    return r.get("source_agent") == "orchestrator" and "phase" not in r and "resolves" not in r
+
+
+def open_escalation_index(entries) -> int | None:
+    """Chỉ số risk escalate còn mở mới nhất (None nếu không có)."""
+    rr = entries or []
+    done = resolved_indexes(rr)
+    return next((i for i in range(len(rr) - 1, -1, -1)
+                 if is_escalation_risk(rr[i]) and is_open_risk(rr[i], i in done)), None)
 
 
 def open_risks(entries) -> list[dict]:

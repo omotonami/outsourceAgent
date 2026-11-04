@@ -205,14 +205,24 @@ def test_ttl_kill_blocks_task():
     def slow(contract, h):
         h.cancelled.wait(2)
         return {"ok": True}
-    b = _board([_t("A", owns=["a"]), _t("B", ["A"], ["b"])])
+    b = _board([_t("A", owns=["a"]), _t("B", ["A"], ["b"])], pid="p-h2-ttl")
     res = Dispatcher(b, slow, ttl=0.1).run()
     assert len(_events(b, "KILL")) == 1
     assert set(res["blocked"]) == {"A", "B"}
+    _wait_no_zombies("p-h2-ttl")
+
+
+def _wait_no_zombies(pid, timeout=5.0):
+    """Dọn: chờ thread zombie của test dừng hẳn — sổ zombie là cấp module, không để rò sang test sau."""
+    end = time.monotonic() + timeout
+    while dsp.live_zombies(pid) and time.monotonic() < end:
+        time.sleep(0.01)
+    assert not dsp.live_zombies(pid)
 
 
 def test_invalid_contract_not_spawned():
-    b, w = _board([_t("A", owns=["a"])]), Recorder()
+    # pid riêng: zombie "A" còn sống của test khác cùng pid sẽ làm "A" bận → không spawn → pending (chập chờn)
+    b, w = _board([_t("A", owns=["a"])], pid="p-h2-contract"), Recorder()
     d = Dispatcher(b, w, owns_of=lambda t: [])  # owns rỗng → sai schema
     res = d.run()
     assert not w.contracts and "A" in res["blocked"]

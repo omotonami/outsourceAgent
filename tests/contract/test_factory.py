@@ -463,7 +463,10 @@ def test_factory_interviewer_uses_spec_prompt_and_routing(monkeypatch):
     assert d["answers"]["id"] == "x9_demo"
     _, system, messages = seen[0]
     spec_md = (REPO / "specs/02_agents/factory_interviewer.md").read_text(encoding="utf-8")
-    assert system.strip() == spec_md.split("## Prompt", 1)[1].replace("{SKILL_GUIDANCE}", "(none)").strip()
+    prompt = spec_md.split("## Prompt", 1)[1].replace("{SKILL_GUIDANCE}", "(none)")
+    # runtime nối schema output nguyên văn sau prompt spec (đợt 2026-11-04 field-fixes)
+    assert system.startswith(prompt)
+    assert "OUTPUT JSON SCHEMA (specs/04_schemas/factory_interviewer.out.json" in system[len(prompt):]
     assert json.loads(messages[0]["content"])["idea"] == "bot tóm tắt meeting"
     assert agent_lint.lint("factory_interviewer") == []
     # không fallback tier âm thầm: thiếu entry routing → lỗi

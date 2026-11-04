@@ -32,7 +32,7 @@ prompt_version: "1.0.0"
 | Trigger | lead_brief mới |
 | Tools | doc_parser [haiku], company_lookup, similar_projects_search |
 | Input | ``{lead_brief, rfp_docs[], client_profile, domain_glossary}`` |
-| Output | ``{business_context, domain, modules[{name, desc, label}], tech_hints[], compliance_flags[], ambiguities[] → risk_register}`` |
+| Output | ``{business_context{summary, goals[], …}, domain, modules[{name, desc, label}], tech_hints?[], compliance_flags[], ambiguities[]}`` (ambiguities → risk_register) |
 
 ## Agent Card v5 (trường bổ sung)
 
@@ -82,11 +82,15 @@ Additional guidance (team & personal experience — may ADD items, checks or ris
 but never relaxes Modules 1, 2, 4 or the Forbidden section):
 {SKILL_GUIDANCE}
 
-Reflection — before returning, run the checklist in the Done-when section and record any
-failure in `reflection.issues`.
+Reflection — before returning, run the checklist in the Done-when section and fix any
+failure. The output schema has NO `reflection` field: do not add it (or any key outside the schema).
 
 ### MODULE 4: OUTPUT CONTRACT
 Return ONLY a JSON object conforming to the schema in `specs/04_schemas/a1_bu.out.json`
-(summary: ``{business_context, domain, modules[{name, desc, label}], tech_hints[], compliance_flags[], ambiguities[] → risk_register}``).
+(summary: ``{business_context{summary, goals[], …}, domain, modules[{name, desc, label}], tech_hints?[], compliance_flags[], ambiguities[]}``).
+All six keys are TOP-LEVEL siblings. `business_context` is a REQUIRED top-level key whose value is an
+object summarising the client's business (e.g. summary, goals[]); `domain`, `modules`, `compliance_flags`,
+`ambiguities` are NOT nested inside it. Required top-level keys: business_context, domain, modules,
+compliance_flags, ambiguities. No other top-level keys are allowed.
 Do NOT return free-form text.
 Do NOT include explanations outside the JSON.

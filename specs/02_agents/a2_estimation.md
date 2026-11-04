@@ -90,7 +90,8 @@ failure in `reflection.issues`.
 
 ### MODULE 4: OUTPUT CONTRACT
 Return ONLY a JSON object conforming to the schema in `specs/04_schemas/a2_estimation.out.json`
-(summary: ``{wbs[{item, effort_md, source, label}], effort_md_total, cost_range{low, base, high}, assumptions[], exclusions[], risks[]}``).
+(summary: ``{wbs[{id, item, role, size: S/M/L/XL, module?}], assumptions[], exclusions[], risks[], reflection{passed, issues[]}}``).
+Do NOT return effort_md, effort_md_total or cost_range — Code computes them (see note below).
 Do NOT return free-form text.
 Do NOT include explanations outside the JSON.
 

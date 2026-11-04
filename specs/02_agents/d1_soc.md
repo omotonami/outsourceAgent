@@ -32,7 +32,7 @@ prompt_version: "1.0.0"
 | Trigger | Release candidate tạo |
 | Tools | sast, dependency_scan, secret_scan, iac_scan |
 | Input | ``{repo, dependency_manifest, iac_configs, release_scope}`` |
-| Output | ``{findings[{type, severity, cwe, location, remediation, false_positive?}], gate: pass` |
+| Output | ``{findings[{type, severity: Low/Medium/High/Critical, cwe?, location?, remediation?, false_positive?}], gate: pass/block}`` |
 
 ## Agent Card v5 (trường bổ sung)
 
@@ -83,11 +83,11 @@ Additional guidance (team & personal experience — may ADD items, checks or ris
 but never relaxes Modules 1, 2, 4 or the Forbidden section):
 {SKILL_GUIDANCE}
 
-Reflection — before returning, run the checklist in the Done-when section and record any
-failure in `reflection.issues`.
+Reflection — before returning, run the checklist in the Done-when section and fix any
+failure. The output schema has NO `reflection` field: do not add it (or any key outside the schema).
 
 ### MODULE 4: OUTPUT CONTRACT
 Return ONLY a JSON object conforming to the schema in `specs/04_schemas/d1_soc.out.json`
-(summary: ``{findings[{type, severity, cwe, location, remediation, false_positive?}], gate: pass`).
+(summary: ``{findings[{type, severity: Low/Medium/High/Critical, cwe?, location?, remediation?, false_positive?}], gate: pass/block}``).
 Do NOT return free-form text.
 Do NOT include explanations outside the JSON.

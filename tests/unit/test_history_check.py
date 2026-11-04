@@ -73,3 +73,18 @@ def test_docs_only_change_passes_and_bad_ref_rc2(repo, capsys):
     assert hc.check(repo, "main") == []                   # docs ngoài history không bị bắt
     assert hc.main(["--base=--evil", "--root", str(repo)]) == 2
     assert hc.main(["--base", "khong-co-ref", "--root", str(repo)]) == 2
+
+
+def test_not_git_repo_gives_bundle_hint(tmp_path, capsys):
+    """Folder giải nén từ zip (không .git) → rc 3 + hướng dẫn clone từ bundle, không traceback."""
+    d = tmp_path / "unzipped"
+    _w(d, "docs/history/README.md", INDEX)
+    assert not hc.is_git_repo(d)
+    assert hc.main(["--base", "b7731d3", "--root", str(d)]) == hc.NOT_GIT_RC
+    err = capsys.readouterr().err
+    assert "KHÔNG phải git repo" in err and "git clone outsourceAgent-company.bundle -b feat/v3-bot-team" in err
+    assert "START_HERE.md" in err
+
+
+def test_is_git_repo_true_for_repo(repo):
+    assert hc.is_git_repo(repo)

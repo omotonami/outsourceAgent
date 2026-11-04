@@ -13,7 +13,7 @@ Xem [`START_HERE.md`](START_HERE.md) · CLI `python -m src.ops.project|report|pr
 ```bash
 python -m venv .venv && source .venv/bin/activate      # Python ≥ 3.10
 pip install -r requirements.txt
-pytest -q                                   # 432 test offline (mock), không cần API key
+pytest -q                                   # 434 test offline (mock), không cần API key
 python -m src.factory.agent_lint --all      # 14/14 agent đạt chuẩn Card v5 / schema / routing / zone
 python -m src.tools.checks.history_check --base main   # luật 9: đổi src/ specs/ config/ phải có docs/history/ (CI)
 python -m src.demo.dry_run                  # cả 4 phase với LLM mock

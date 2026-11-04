@@ -2,7 +2,7 @@
 
 Tài liệu này tóm tắt toàn bộ cuộc làm việc để tiếp tục ở account/phiên khác. Dán file này (hoặc nội dung) vào phiên mới, kèm repo.
 
-> Cập nhật 2026-11-04: thêm bộ vận hành công ty (`src/ops/`, `.claude/`, `START_HERE.md`, `docs/ops/`) — 432 test; xem `docs/history/2026-11-04_company-ops-kit.md`.
+> Cập nhật 2026-11-04: thêm bộ vận hành công ty (`src/ops/`, `.claude/`, `START_HERE.md`, `docs/ops/`) — 434 test; xem `docs/history/2026-11-04_company-ops-kit.md`.
 >
 > Cập nhật 2026-11-03: đã xong bot team v3 (H1–H5, đề án 0002 — tóm tắt ở `docs/adr/0002-bot-team-v3.md`) và refactor toàn repo (nhánh `feat/v3-bot-team`). Mục 3 và 5 phản ánh trạng thái này.
 
@@ -13,7 +13,7 @@ Tài liệu này tóm tắt toàn bộ cuộc làm việc để tiếp tục ở
 - Làm outsourcing delivery cho client **Singapore** (PDPA, MAS TRM với fintech).
 - Có framework riêng **IDEA → TASK Framework v5** (12 bước) và muốn áp nó để xây hệ multi-agent.
 - Phong cách: tiếng Việt, xưng "mày/tao", thích sơ đồ, muốn thứ chạy được, ghét output dài dòng và việc bắt người làm thay máy.
-- Môi trường: **macOS + VS Code**. Python mặc định 3.9 **không chạy được** (code cần ≥3.10) → dùng `/opt/homebrew/bin/python3.12`. Repo đang ở `~/Downloads/outsourcing-agents-v2`.
+- Môi trường: **macOS + VS Code**. Python mặc định 3.9 **không chạy được** (code cần ≥3.10) → dùng `/opt/homebrew/bin/python3.12`. Cài/lấy repo: theo [`START_HERE.md`](../START_HERE.md) (clone từ `outsourceAgent-company.bundle`, nhánh `feat/v3-bot-team`; zip không có `.git`).
 
 ---
 
@@ -29,7 +29,7 @@ Tài liệu này tóm tắt toàn bộ cuộc làm việc để tiếp tục ở
 
 ---
 
-## 3. Hệ đã xây: `outsourceAgent` (nhánh `feat/v3-bot-team`, 432 test pass, `agent_lint --all` 14/14)
+## 3. Hệ đã xây: `outsourceAgent` (nhánh `feat/v3-bot-team`, 434 test pass, `agent_lint --all` 14/14)
 
 Lịch sử thay đổi theo đợt + quyết định của chủ repo (ngày giờ, commit, số test): [`docs/history/`](history/README.md).
 
@@ -85,7 +85,7 @@ CLAUDE.md   hiến pháp cho Claude Code
 ```bash
 /opt/homebrew/bin/python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pytest -q                              # 432 test, không cần key
+pytest -q                              # 434 test, không cần key
 python -m src.factory.agent_lint --all # 14/14
 python -m src.tools.checks.history_check --base main   # luật 9 (CLAUDE.md)
 python -m src.demo.dry_run             # mock cả 4 phase
@@ -152,14 +152,14 @@ Thiết kế đã thống nhất:
 
 - Sửa file tiếng Việt bằng `sed`/thao tác chuỗi trong shell làm **hỏng byte UTF-8** (mất lead byte `0xe1`). Viết file bằng heredoc hoặc Python `open(..., encoding="utf-8")`, và quét UTF-8 toàn repo sau mỗi lần sửa.
 - Sandbox không cài được `jsonschema` thật; dùng stub validate rỗng đã che một bug schema (estimate.source). Đã thay bằng stub kiểm tra thật — luôn test với validator thật trên máy.
-- Script chạy sai thư mục từng tạo thư mục lồng `outsourcing-agents-v2/outsourcing-agents-v2/` (đã xoá).
+- Script chạy sai thư mục từng tạo thư mục repo lồng nhau (đã xoá) — luôn chạy lệnh ở gốc repo.
 - Python 3.9 trên macOS lỗi cú pháp `X | None` → dùng 3.12.
 
 ---
 
 ## 7. Tài sản đã tạo
 
-- `outsourcing-agents-v2.zip` — repo đầy đủ kèm `.git` (bản chính).
+- `outsourceAgent-company.bundle` — repo đầy đủ lịch sử (bản chính, `main` + `feat/v3-bot-team`); `outsourceAgent-company.zip` = `git archive`, không có `.git`, chỉ để đọc. Cách cài: `START_HERE.md`.
 - `docs/SPEC.md` (workflow + 5 diagram mermaid), `docs/TOOL_GUIDE.md` (cây + cách dùng).
 - Artifact mô phỏng phía client (không nối engine Python): `pipeline-interactive.jsx` (nhập brief, Mock/Thật, clarify + AI đề xuất, function list, gate, ISO, bảng model·token·chi phí), `pipeline-visual.jsx`, `presales-demo.jsx`.
 - Claude Doc "Outsourcing Delivery — Multi-Agent Framework (SG market) v2" ở account cũ (account mới không mở được trừ khi được share).
@@ -168,4 +168,4 @@ Thiết kế đã thống nhất:
 
 ## 8. Prompt mở đầu cho phiên mới
 
-> Tôi đang xây hệ multi-agent outsourcing delivery theo framework IDEA → TASK v5 của tôi. Đây là file HANDOFF.md và repo outsourcing-agents-v2 (đính kèm). Đọc kỹ cả hai, đặc biệt mục 4 (quyết định đã chốt — đừng đổi) và mục 5.1. Việc tiếp theo: code **Dynamic Re-routing** đúng thiết kế ở 5.1, kèm test, chạy pytest, cập nhật docs/SPEC.md. Trả lời tiếng Việt, ngắn gọn, ưu tiên làm thật và có test.
+> Tôi đang xây hệ multi-agent outsourcing delivery theo framework IDEA → TASK v5 của tôi. Đây là file HANDOFF.md và repo outsourceAgent (clone từ bundle theo START_HERE.md). Đọc kỹ cả hai, đặc biệt mục 4 (quyết định đã chốt — đừng đổi) và mục 5.1. Việc tiếp theo: code **Dynamic Re-routing** đúng thiết kế ở 5.1, kèm test, chạy pytest, cập nhật docs/SPEC.md. Trả lời tiếng Việt, ngắn gọn, ưu tiên làm thật và có test.

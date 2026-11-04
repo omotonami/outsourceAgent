@@ -27,6 +27,17 @@
 
 Số test sau đợt: **432** (411 + 21 `tests/contract/test_ops.py`).
 
+## Vòng 2 — phản hồi từ bot Chief ở account công ty (2026-11-04)
+Phản hồi (qua Chief of Staff): bản zip (git archive) không có `.git` → `history_check` không chạy; HANDOFF còn đường dẫn cũ.
+
+| Mục | Đã đổi gì | File chính | Test |
+|---|---|---|---|
+| Cài từ bundle | START_HERE: cách chính = `git clone outsourceAgent-company.bundle -b feat/v3-bot-team`; zip ghi rõ không có `.git`; cách gắn lịch sử cho folder đã copy (`git init -b _init` + fetch bundle + `symbolic-ref` + `reset`, đã thử: `git status` sạch) | `START_HERE.md` | — |
+| history_check không phải git repo | rc 3 + hướng dẫn clone từ bundle thay vì lỗi git khó hiểu | `src/tools/checks/history_check.py`, `tests/unit/test_history_check.py` | 2 |
+| HANDOFF | Bỏ đường dẫn cũ `~/Downloads/outsourcing-agents-v2` / tên zip cũ, trỏ START_HERE + bundle | `docs/HANDOFF.md` | — |
+
+Số test sau vòng 2: **434**.
+
 ## Phát hiện cần chủ repo quyết
 - **Ký gate cho project thật chưa có đường:** `gate_ui` của dashboard ký board demo DASH trong RAM, không ghi `sign`
   vào event store. Dự án tạo bằng `src.ops.project` sẽ dừng ở `AWAIT_G1`. Test mô phỏng chữ ký người bằng

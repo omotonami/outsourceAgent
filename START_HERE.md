@@ -1,16 +1,20 @@
 # START HERE — FLOW (outsourceAgent) ở account công ty
 
-## Cài đặt (5 phút)
+## Cài đặt (5 phút) — từ git bundle (cách CHÍNH: có đủ lịch sử, `history_check` chạy được)
 ```bash
-git clone outsourceAgent-company.bundle outsourceAgent && cd outsourceAgent   # hoặc giải nén .zip
-git checkout feat/v3-bot-team                     # (bản zip đã là nhánh này)
+git clone outsourceAgent-company.bundle -b feat/v3-bot-team outsourceAgent && cd outsourceAgent
 python3 -m venv .venv && source .venv/bin/activate   # Python ≥ 3.10 (macOS: /opt/homebrew/bin/python3.12)
 pip install -r requirements.txt
 python -m src.ops.doctor                          # checklist môi trường; FAIL = sửa trước
 python -m pytest -q                               # toàn bộ test offline, không cần key
+python -m src.tools.checks.history_check --base b7731d3   # luật 9 — cần .git
 export ANTHROPIC_API_KEY=...                      # key CÔNG TY, đặt trong shell/.env — không commit
 claude                                            # Claude Code đọc CLAUDE.md + .claude/ (skills, permissions)
 ```
+`outsourceAgent-company.zip` chỉ để đọc nhanh: **không có `.git`** → `history_check` báo lỗi (rc 3).
+Folder đã copy/giải nén sẵn không có `.git`: clone lại như trên, hoặc gắn lịch sử tại chỗ:
+`git init -b _init && git fetch <đường dẫn>/outsourceAgent-company.bundle 'refs/heads/*:refs/heads/*' &&
+git symbolic-ref HEAD refs/heads/feat/v3-bot-team && git reset` (giữ file đang có; `git status` = khác biệt).
 Chạy thử không cần key: thêm `--mock` vào `project run` / `project huddle`.
 
 ## 4 việc hằng ngày

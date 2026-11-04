@@ -12,3 +12,5 @@ eventstore:
 # (tổng lượt = 1 + schema_retries) với thông báo lỗi khoá gốc rõ ràng; vẫn sai → SCHEMA_FAIL → ESCALATED.
 agent_runtime:
   schema_retries: 1        # giữ mặc định cũ (max_retries=1); chủ repo đổi số ở đây
+  extract_max_chars: 400000       # output model dài hơn → coi là lỗi parse (retry), không quét
+  extract_max_candidates: 64      # số span {…} tối đa thử decode khi tìm object JSON trong output

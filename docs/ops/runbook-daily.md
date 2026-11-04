@@ -18,7 +18,7 @@ Mọi lệnh chạy ở gốc repo, venv đã bật. Event store: `config/runtim
 | Tối | Retention (PDPA) | `python -m src.ops.prune` (bản nháp cũ hơn `retention.drafts_days` = 30) | Claude |
 | Khi đóng dự án | Xoá hay trả dữ liệu client | `python -m src.ops.prune --closed-project P-...` | **Người quyết**, rồi mới chạy |
 
-`project run` exit code: 0 = dừng bình thường (gate / released), 2 = BLOCKED / ESCALATED (cần người), 1 = lỗi đầu vào.
+`project run` exit code: 0 = dừng bình thường (gate / released / abandoned), 2 = BLOCKED / ESCALATED (cần người), 1 = lỗi đầu vào.
 
 ## Gate (chủ repo duyệt 2026-11-04 07:4x: dashboard theo dự án + terminal tương tác do người gõ)
 Chỉ NGƯỜI ký/trả lại. Cả hai đường đi qua lõi `src/ops/gate.py` → `Blackboard.sign(gate, by=<tên người>, via="gate_ui")`
@@ -38,15 +38,34 @@ Chỉ NGƯỜI ký/trả lại. Cả hai đường đi qua lõi `src/ops/gate.py
   biết), `script`/`expect`/`unbuffer` (giả TTY), curl/wget/http tới `/api/projects/*/gate`, WebFetch localhost. Đây là
   rào cấu hình + TTY, không phải xác thực mật mã: server chạy localhost, không đăng nhập — ai mở được dashboard là ký được.
 
+## ESCALATED — người gỡ (đợt field-fixes 2026-11-04; cùng chuẩn ký gate, luật 10)
+Dự án ESCALATED không tự chạy tiếp. NGƯỜI chọn 1 trong 3 hành động; cả hai đường đi qua lõi `src/ops/escalation.py`
+(`resolve`), ghi DECISION vào trace_log + APPEND bản ghi resolution vào risk_register (risk escalate coi như đã đóng).
+
+| Hành động | Khi nào | Kết quả |
+|---|---|---|
+| `retry` | Lỗi tạm thời / đã sửa nguyên nhân (vd bản sửa parse JSON, đã nâng budget) | State về phase lỗi; `project run` gọi lại agent lỗi với tier cao hơn nếu routing cho phép (`specs/03_routing.yaml escalate_to`, vd a1_bu → opus) |
+| `backtrack:<PRESALES\|DISCOVERY\|BUILD\|SECURITY>` | Đầu vào phase trước sai (vd brief/proposal), cần làm lại từ đó | Huỷ chữ ký gate phía sau phase đó; `run` chạy lại agent các phase từ đó tới phase lỗi (dù zone đã có) |
+| `abandon` | Dừng hẳn dự án | State `ABANDONED` (đóng, không chạy nữa; dữ liệu giữ — xoá/trả theo `prune --closed-project`, người quyết) |
+
+| Đường | Người làm |
+|---|---|
+| Terminal của NGƯỜI | `python -m src.ops.escalation resolve --id P-... --action retry` (hoặc `--action backtrack:DISCOVERY`, `--action abandon`, thêm `--note "..."`) → xem tóm tắt + hash → gõ tên → gõ `XAC NHAN`. Bắt TTY; không nhận tên qua tham số; tên máy / gõ sai / EOF / tình trạng đổi giữa chừng → rc 2, không ghi gì |
+| Dashboard (API) | `GET /api/projects/{id}/escalation` (lý do, phase lỗi, agent, `options`, `packet_hash`) · `POST /api/projects/{id}/escalation/{retry\|backtrack:PHASE\|abandon}` body `{"signer": "<tên người>", "typed_confirm": "XAC NHAN", "note": "...", "packet_hash": "..."}` → 400 (tên máy / thiếu XAC NHAN / action lạ), 404 (không có dự án), 409 (không ESCALATED / hash đổi). **Chưa có nút UI** — đợt UI bên công ty thêm nút gọi API này |
+
+Sau `retry` / `backtrack`: chạy `python -m src.ops.project run --id P-...`. Claude chỉ đưa lệnh cho người: `.claude/settings.json`
+deny `python -m src.ops.escalation` (mọi biến thể đã biết) và curl/wget/http tới `/api/projects/*/escalation*`.
+
 ## Xử lý sự cố
 | Triệu chứng | Nguyên nhân thường gặp | Làm gì |
 |---|---|---|
-| `dừng: ESCALATED` | Agent fail schema 2 lần (escalate) hoặc vượt budget | Xem `report daily` → Risk mở / BLOCKED-escalate. Người quyết: sửa brief/spec rồi tạo project mới, hoặc nâng budget (chủ repo). CLI **không** tự gỡ ESCALATED. |
+| `dừng: ESCALATED` | Agent fail schema hết số lượt retry (`config/runtime.yaml → agent_runtime.schema_retries`) hoặc vượt budget | Xem `report daily` / `GET /api/projects/P-.../escalation` (lý do, phase lỗi, agent). **Người** gỡ theo mục "ESCALATED — người gỡ" bên dưới. Máy/Claude không tự gỡ. |
 | `dừng: BLOCKED — guard từ chối ...` | Guard Code (vd `discovery_ready`: AC < 95% Given/When/Then; `presales_ready`: assumption chưa vào proposal) | Đọc lý do; người xử lý đầu vào. **Không nới guard** (luật 4). Chạy lại `run`. |
 | `BLOCKED — task blocked: [...]` | Dispatcher: task fail QC quá `max_build_loops`, KILL quá ttl, dep blocked | `report daily` (bản nội bộ) có lý do từng task. Tech Lead người quyết. |
 | `BLOCKED — lỗi khi chạy: ...API key / Connection` | Thiếu `ANTHROPIC_API_KEY`, proxy/mạng công ty | `python -m src.ops.doctor`; đặt key; kiểm proxy. State không đổi, chạy lại được. |
 | Vượt budget | `config/budgets.yaml per_project_tokens` có số và đã chạm | Dự án → ESCALATED. Chủ repo quyết nâng số (sửa config + docs/history). Bot không tự đặt số. |
 | Budget null | Chưa đặt số | Không có trần token. `doctor` WARN, report ghi "chưa đặt". Chủ repo đặt sau khi có baseline. |
+| Phòng 3D "0 đang làm" ở presales/discovery | Bản trước đợt field-fixes không ghi sự kiện theo agent | Từ đợt này pipeline ghi ASSIGN/RESULT/BLOCKED mỗi lần gọi agent; agent chỉ "đang làm" trong lúc `run` gọi nó (dừng ở gate → waiting_gate) |
 | SSE / Phòng 3D không LIVE | Dashboard đọc file store khác; proxy đệm SSE | Kiểm `OA_EVENTSTORE_PATH` giống nhau ở 2 terminal; thử `http://127.0.0.1:8000`; trang tự rơi về poll 2s. |
 | Phòng 3D trắng | CDN `cdn.jsdelivr.net` (Three.js) bị chặn | Dashboard/`/api/*` vẫn dùng được. Vendor Three.js cần chủ repo duyệt. |
 | `project new` lỗi brief | Thiếu `client` / `source` / `received_at` | Hỏi người bổ sung, không tự bịa. |

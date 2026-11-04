@@ -71,5 +71,47 @@ typed_confirm, action lạ, hash 409), settings deny.
 
 Số test sau mục 2: **537**.
 
+## Mục 3 — pipeline phát sự kiện theo agent (lỗi B)
+**Nguyên nhân gốc:** `src/ops/pipeline.py` gọi agent presales/discovery/security trực tiếp, không ghi sự kiện
+team nào; chỉ Dispatcher (BUILD) ghi ASSIGN/SPAWN/RESULT theo task. Phòng 3D suy "đang làm" từ task/`active`
+→ ở presales/discovery luôn "0 đang làm".
+
+| Đã đổi gì | File chính |
+|---|---|
+| `pipeline.assign/finish`: trước mỗi lần gọi agent (`Runner._call`, mọi phase presales/discovery/security, kể cả b4) ghi ASSIGN `{from: orchestrator, to: agent, agent, phase, project}` (task_id rỗng = bước phase); sau đó RESULT `{ok: true}` hoặc BLOCKED `{reason: "<agent>: <mã lỗi>: <lý do ≤160 ký tự>"}`; exception (mạng, budget…) → BLOCKED rồi ném tiếp. Không raw output | `src/ops/pipeline.py` |
+| Huddle gọi tay (`project huddle`): ASSIGN cho từng thành viên (proposer/critic/decider theo config) trước, RESULT/BLOCKED sau | `src/ops/project.py` |
+| `room_state.step_status`: ASSIGN chưa có RESULT/BLOCKED → working; BLOCKED cuối → blocked (tới ASSIGN kế tiếp hoặc DECISION người gỡ ESCALATED retry/backtrack/abandon); RESULT → idle. `snapshot` dùng (ưu tiên giữ nguyên: blocked > waiting_gate > working > idle). Route event: RESULT/BLOCKED của bước phase đi từ agent → orchestrator | `src/orchestrator/room_state.py` |
+| Team feed summary cho bước phase: "giao bước presales cho a1_bu", "a1_bu: OK" (trước đây sẽ là "giao None …") | `src/orchestrator/team_feed.py` |
+
+Test mới (`tests/contract/test_pipeline_events.py`, 8): `--mock` presales → ASSIGN/RESULT a1, a2, a3 đúng thứ tự +
+trường from/to/phase/project; snapshot giữa chừng (process khác đọc event store khi a2 đang chạy) → a2 working, đúng 1
+agent working; discovery b1→b4; agent lỗi → BLOCKED không chứa raw output, người retry → hết blocked, lỗi lại → blocked
+(retry_done không xoá); exception → BLOCKED; huddle gọi tay; unit step_status + summary.
+
+Số test sau mục 3: **545**.
+
+## Mục 4 — tài liệu
+| Đã đổi gì | File chính |
+|---|---|
+| Runbook: mục mới "ESCALATED — người gỡ" (3 hành động, 2 đường, mã lỗi API, sau đó `run`); dòng sự cố ESCALATED trỏ tới mục này; thêm dòng "Phòng 3D 0 đang làm"; exit code `abandoned` = 0 | `docs/ops/runbook-daily.md` |
+| START_HERE thêm 2 dòng gỡ ESCALATED (55 dòng); README/HANDOFF số test 545 + trỏ file đợt này | `START_HERE.md`, `README.md`, `docs/HANDOFF.md` |
+
+## Mục 5 — đóng gói lại `/home/claude/out/company-kit/`
+Bundle `main` + `feat/v3-bot-team` (sau commit cuối của đợt), zip (`git archive`, prefix `outsourceAgent/`, không có
+`.git`), `START_HERE.md`, `chief-prompt.md` (bản sao `docs/ops/`). Clone thử từ bundle ra `/tmp/kitcheck3` → pytest +
+`history_check --base b7731d3`.
+
+Số test cuối đợt: **545** (481 + 18 runtime + 38 escalation + 8 pipeline events), `agent_lint --all` 14/14,
+`history_check --base b7731d3` PASS.
+
 ## Việc còn mở
-- (cập nhật ở cuối đợt)
+- **UI (đợt bên công ty):** nút gỡ ESCALATED trên dashboard gọi `GET/POST /api/projects/{id}/escalation[/{action}]`
+  (body `signer` + `typed_confirm` "XAC NHAN" + `packet_hash`) — đợt này KHÔNG sửa `index.html`/`room.html`.
+  Phòng 3D không cần đổi UI: `agents[].status` từ API đã có working/blocked theo bước phase.
+- `CLAUDE.md` mục "Vận hành hằng ngày" chưa nhắc `src.ops.escalation` (file thuộc nhóm "ask" — chủ repo quyết có thêm
+  1 dòng không). Luật 10 đã bao phủ.
+- Retry ở BUILD (Dispatcher) chạy lại Dispatcher nhưng không truyền signal nâng tier cho từng worker.
+- Thông điệp lỗi ở lượt retry vẫn chỉ gửi lại khi còn lượt; số lượt (`agent_runtime.schema_retries` = 1) — chủ repo
+  quyết có nâng lên 2 theo card ("retry ≤ 2") không.
+- Card Output của a2 vẫn mô tả estimate SAU khi Code enrich (khác output LLM ở MODULE 4) — có chủ đích, ghi rõ trong spec.
+- Bản ghi resolution trong risk_register có `resolved_by` = tên người do chính người gõ (gate_ui/terminal) — không phải bot điền.

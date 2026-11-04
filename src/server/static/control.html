@@ -1,0 +1,384 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Control Room — FLOW</title>
+<!-- Một trang: trái = Phòng 3D (nhúng /room?all=1&embed=1 — MỘT nguồn room.html), phải = Chat CoS | Việc | Gate | Sự cố | Token.
+     Realtime qua SSE /api/room/all/stream. Không hiển thị raw thinking/prompt. Gate / gỡ ESCALATED / tạo dự án / giao việc phụ:
+     NGƯỜI gõ tên + XAC NHAN (CLAUDE.md luật 10). -->
+<style>
+:root{--paper:#FBFAF7;--panel:#fff;--ink:#1A2332;--muted:#5C6B7A;--line:#E6E8EC;--soft:#F4F2EE;--ok:#15803D;--bad:#A3281B;
+--warn:#B5720E;--blue:#1F5BB0;--blueBg:#E3EEFB}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font:14px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{display:flex;flex-direction:column;overflow:hidden}
+header{flex:none;display:flex;align-items:center;gap:10px;padding:7px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+header b{font-size:15px}header .sub{font-size:12px;color:var(--muted)}
+header nav{margin-left:auto;display:flex;gap:10px;font-size:12px}header nav a{color:var(--muted);text-decoration:none}
+.badge{font-size:10px;font-weight:800;letter-spacing:.06em;padding:2px 6px;border-radius:5px;background:#94A3B8;color:#fff}
+.badge.live{background:var(--ok)}.badge.err{background:var(--bad)}
+main{flex:1;min-height:0;display:flex}
+#left{flex:0 0 58%;min-width:0;border-right:1px solid var(--line);background:#F1ECE4}
+#left iframe{display:block;width:100%;height:100%;border:0}
+#right{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--paper)}
+.tabs{flex:none;display:flex;gap:2px;padding:6px 8px 0;border-bottom:1px solid var(--line);background:var(--panel);overflow-x:auto}
+.tabs button{border:0;background:transparent;font:700 13px inherit;color:var(--muted);padding:8px 11px;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--ink)}
+.tabs .cnt{display:inline-block;min-width:16px;font-size:10px;font-weight:800;color:#fff;background:var(--muted);border-radius:8px;padding:0 5px;margin-left:4px}
+.tabs .cnt.hot{background:var(--bad)}.tabs .cnt.wait{background:var(--warn)}.tabs .cnt:empty{display:none}
+.pane{flex:1;min-height:0;overflow:auto;padding:12px 14px;display:none;-webkit-overflow-scrolling:touch}.pane.on{display:block}
+#pChat.on{display:flex;flex-direction:column;padding:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
+.muted{color:var(--muted);font-size:12px}
+h3{font-size:13.5px;margin:0 0 8px}
+button.b{border:0;background:var(--ink);color:#fff;font:700 12.5px inherit;padding:7px 12px;border-radius:7px;cursor:pointer}
+button.b.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}button.b.ok{background:var(--ok)}button.b.bad{background:var(--bad)}
+button.b.warn{background:var(--warn)}button.b:disabled{opacity:.5;cursor:default}
+input,select,textarea{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);width:100%}
+label{display:block;font-size:12px;font-weight:600;color:var(--muted)}label>input,label>select,label>textarea{margin-top:3px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.msgOk{color:var(--ok);font-size:12.5px}.msgErr{color:var(--bad);font-size:12.5px}
+pre{white-space:pre-wrap;font-size:11.5px;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:8px;max-height:240px;overflow:auto;margin:6px 0}
+details summary{cursor:pointer;font-size:12.5px;margin:4px 0}
+/* chat */
+#chatLog{flex:1;min-height:0;overflow:auto;padding:12px 14px}
+.bub{max-width:92%;margin:0 0 10px;padding:9px 11px;border-radius:12px;font-size:13px}
+.bub.me{margin-left:auto;background:var(--ink);color:#fff;border-bottom-right-radius:3px;white-space:pre-wrap}
+.bub.cos{background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:3px}
+.bub.cos ol{margin:0;padding-left:18px}.bub.cos li{margin:3px 0}.bub.cos li b{font-size:12px}
+.bub.cos ul{margin:2px 0 0;padding-left:16px}.bub.sys{background:var(--blueBg);color:var(--blue);font-size:12px}
+.bub .pj{font-size:10px;font-weight:800;color:var(--blue);margin-bottom:3px}
+#chatBox{flex:none;border-top:1px solid var(--line);background:var(--panel);padding:8px 10px}
+#chatBox textarea{resize:vertical;min-height:42px;max-height:160px}
+.sheet{display:none;border-top:1px solid var(--line);background:#FFFDF8;padding:10px 12px;max-height:62%;overflow:auto}.sheet.on{display:block}
+.confirm{background:#FBF0DC;border:1px solid #EBC98A;border-radius:8px;padding:9px;margin-top:8px}
+.confirm b{color:#7A4B06}
+/* việc */
+.proj{border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:10px;overflow:hidden}
+.proj>.ph{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--soft);font-weight:800;font-size:13px}
+.proj.esc{border-color:#E8B4AC}.proj.esc>.ph{background:#FDF1EF}
+.st{font-size:10.5px;font-weight:800;border-radius:999px;padding:1px 7px;background:#EEF1F4;color:#46525F}
+.st.esc{background:var(--bad);color:#fff}.st.gate{background:#FBF0DC;color:#8A560A}.st.run{background:#E5F4EA;color:var(--ok)}
+.t{display:grid;grid-template-columns:auto 1fr auto;gap:2px 8px;padding:6px 10px;border-top:1px solid var(--line);font-size:12.5px}
+.t .id{font-weight:800}.t .tt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.t .meta{grid-column:2/4;font-size:11px;color:var(--muted)}
+.chip{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:#EEF1F4;color:#46525F;white-space:nowrap}
+.c-in_dev,.c-started{background:var(--blueBg);color:var(--blue)}.c-testing{background:#E6F2F1;color:#0F6E6E}.c-qc{background:#EFE9FA;color:#5B3FA6}
+.c-await_merge,.c-done,.c-merged{background:#E5F4EA;color:var(--ok)}.c-blocked,.c-failed{background:#FBE7E4;color:var(--bad)}.c-queued{background:#FBF0DC;color:#8A560A}
+.kd{font-size:9.5px;font-weight:800;border-radius:3px;padding:0 4px;background:#FBF0DC;color:#8A560A;margin-left:4px}
+.ag{display:grid;grid-template-columns:1fr auto;gap:1px 8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.ag .meta{grid-column:1/3;font-size:11px;color:var(--muted)}
+.s-working{background:#E5F4EA;color:var(--ok)}.s-blocked{background:#FBE7E4;color:var(--bad)}.s-waiting_gate{background:#FBF0DC;color:#8A560A}
+/* token */
+.big{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
+.bar{height:7px;border-radius:4px;background:#EEF1F4;overflow:hidden;margin-top:3px}.bar i{display:block;height:100%;background:#3B7DD8}
+.tr{padding:5px 0;border-bottom:1px solid var(--line);font-size:12.5px;font-variant-numeric:tabular-nums}
+.tr .row{justify-content:space-between}
+.empty{color:var(--muted);font-size:12.5px;padding:10px 2px}
+.flash{animation:fl 1.4s}@keyframes fl{20%{background:#FFF6D6}}
+@media(max-width:760px){
+  body{overflow:auto;height:auto}main{flex-direction:column}
+  #left{flex:none;height:56vh;border-right:0;border-bottom:1px solid var(--line)}
+  #right{min-height:80vh}.pane{max-height:none}.grid2{grid-template-columns:1fr}
+  header .sub{display:none}header nav a.x{display:none}
+  #chatLog{min-height:40vh}
+}
+@media (prefers-reduced-motion: reduce){.flash{animation:none}}
+</style></head><body>
+<header><b>Control Room</b><span class="badge" id="badge">…</span><span class="sub" id="sub">đang kết nối</span>
+  <nav><a href="/room" target="_blank" title="Phòng 3D toàn màn hình">Phòng 3D ↗</a><a class="x" href="/legacy" title="Dashboard cũ (pipeline demo, Team feed)">Dashboard cũ</a></nav></header>
+<main>
+  <section id="left"><iframe id="room" title="Phòng 3D — tất cả dự án" src="/room?all=1&amp;embed=1"></iframe></section>
+  <section id="right">
+    <div class="tabs" role="tablist">
+      <button data-tab="chat" class="on">Chat CoS</button><button data-tab="work">Việc<span class="cnt" id="nWork"></span></button>
+      <button data-tab="gate">Gate<span class="cnt wait" id="nGate"></span></button><button data-tab="incident">Sự cố<span class="cnt hot" id="nInc"></span></button>
+      <button data-tab="token">Token</button></div>
+
+    <div class="pane on" id="pChat">
+      <div id="chatLog"><div class="bub sys">Chief of Staff (agent <b>e2_cos</b>, chỉ đọc). Hỏi tình hình / nhờ lập kế hoạch → trả lời theo 5 mục.
+        CoS KHÔNG ký gate, không gỡ sự cố, không sửa sản phẩm. Tạo dự án / giao việc phụ: bạn gõ tên + <b>XAC NHAN</b>.</div></div>
+      <div class="sheet" id="sheetBrief"></div>
+      <div class="sheet" id="sheetSide"></div>
+      <div id="chatBox">
+        <div class="row" style="margin-bottom:6px"><select id="chatProj" style="width:auto;max-width:55%" aria-label="Dự án cho câu hỏi"></select>
+          <button class="b ghost" id="btnBrief" title="Brief mới → CoS soạn lead_brief → bạn xác nhận">＋ Giao việc</button>
+          <button class="b ghost" id="btnSide" title="Giao việc phụ / điều tra cho một role">＋ Giao việc phụ</button></div>
+        <div class="row" style="flex-wrap:nowrap"><textarea id="chatIn" rows="2" placeholder="Hỏi CoS… (Enter gửi, Shift+Enter xuống dòng)"></textarea>
+          <button class="b" id="chatSend">Gửi</button></div>
+      </div>
+    </div>
+
+    <div class="pane" id="pWork"><div id="workBody"><div class="empty">Đang tải…</div></div></div>
+    <div class="pane" id="pGate">
+      <div class="card"><div class="row"><b style="font-size:13px">Dự án</b><select id="gProj" style="width:auto;min-width:200px"></select>
+        <button class="b ghost" id="gRef">↻</button></div>
+        <div class="muted" style="margin-top:6px">Chỉ NGƯỜI ký. Gõ tên của chính bạn và gõ <b>XAC NHAN</b>. Bot/Claude không ký thay (CLAUDE.md luật 10).
+          Cùng lõi với terminal <code>python -m src.ops.gate</code>. Ký xong scheduler tự chạy tiếp.</div></div>
+      <div id="gMsg"></div><div class="card" id="gBody"><div class="muted">chọn dự án</div></div></div>
+    <div class="pane" id="pIncident"><div id="incBody"><div class="empty">Không có dự án ESCALATED.</div></div></div>
+    <div class="pane" id="pToken"><div id="tokBody"></div></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtTok = n => { n=+n||0; return n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e3?(n/1e3).toFixed(1)+'k':String(n); };
+const fmtUsd = v => v==null ? '$—' : '$'+(+v).toFixed(v>=1?2:3);
+const CONFIRM = 'XAC NHAN';
+let VIEW = {agents:[], tasks:[], projects:[], gates:[], escalated:[], usage:null}, TAB = 'chat';
+const Q = new URLSearchParams(location.search);
+
+async function api(url, opt){
+  const r = await fetch(url, Object.assign({cache:'no-store'}, opt||{}));
+  let j = null; try { j = await r.json(); } catch(e){ j = {error:'HTTP '+r.status}; }
+  return {ok:r.ok, status:r.status, j};
+}
+const post = (url, body) => api(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+const nameOf = id => (VIEW.agents.find(a=>a.id===id)||{}).name || id;
+
+// ---------------- tab ----------------
+function tab(t){
+  TAB = t;
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.tab===t));
+  for (const [k,id] of Object.entries({chat:'pChat',work:'pWork',gate:'pGate',incident:'pIncident',token:'pToken'})) $(id).classList.toggle('on', k===t);
+  if (t==='gate') loadGate(); if (t==='incident') renderIncidents(true); if (t==='work') renderWork(); if (t==='token') renderToken();
+}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
+
+// ---------------- realtime ----------------
+function apply(v){
+  for (const k of ['agents','tasks','projects','gates','escalated','usage']) if (v[k]!==undefined) VIEW[k] = v[k];
+  $('nWork').textContent = VIEW.tasks.filter(t=>!['merged','done'].includes(t.status)).length || '';
+  $('nGate').textContent = VIEW.gates.length || '';
+  $('nInc').textContent = VIEW.escalated.length || '';
+  $('sub').textContent = `${VIEW.projects.length} dự án · ${VIEW.agents.filter(a=>a.status==='working').length} agent đang làm · ${fmtTok((VIEW.usage||{}).total)} token`;
+  projOptions();
+  if (TAB==='work') renderWork(); if (TAB==='token') renderToken(); if (TAB==='incident') renderIncidents(false);
+  if (TAB==='gate') gateList();
+}
+function setBadge(k, t){ const b=$('badge'); b.className='badge '+k; b.textContent=t; }
+async function start(){
+  const s = await api('/api/room/all?limit=1');
+  if (!s.ok){ setBadge('err','LỖI'); $('sub').textContent = 'không đọc được /api/room/all'; return; }
+  apply(s.j); let since = s.j.seq||0; let es = null, poll = null;
+  const connect = ()=>{
+    es = new EventSource(`/api/room/all/stream?since=${since}`);
+    es.addEventListener('room', m=>{ const f = JSON.parse(m.data); since = Math.max(since, f.seq||0); apply(f); setBadge('live','LIVE'); });
+    es.onopen = ()=>{ setBadge('live','LIVE'); if (poll){ clearInterval(poll); poll=null; } };
+    es.onerror = ()=>{ setBadge('err','MẤT KẾT NỐI');
+      if (!poll) poll = setInterval(async()=>{ const r = await api('/api/room/all?limit=1').catch(()=>null); if (r && r.ok){ apply(r.j); since=Math.max(since,r.j.seq||0); } }, 3000);
+      if (es.readyState===2){ es.close(); setTimeout(connect, 4000); } };
+  };
+  connect();
+  const t = Q.get('tab'); if (t) tab(t === 'incident' || t === 'gate' || t === 'work' || t === 'token' ? t : 'chat');
+}
+window.addEventListener('message', e=>{                // từ Phòng 3D (iframe cùng origin)
+  if (e.origin !== location.origin || !e.data) return;
+  if (e.data.type==='room:incident'){ INC_FOCUS = e.data.project; tab('incident'); }
+  if (e.data.type==='room:project'){ tab('work'); const el = document.querySelector(`.proj[data-p="${CSS.escape(e.data.project)}"]`);
+    if (el){ el.scrollIntoView({block:'start'}); el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'),1500); } }
+});
+
+// ---------------- chat CoS ----------------
+function projOptions(){
+  for (const id of ['chatProj']){
+    const sel = $(id), cur = sel.value;
+    const html = `<option value="">Tất cả dự án</option>` + VIEW.projects.map(p=>`<option value="${esc(p.id)}">${esc(p.id)} · ${esc(p.state||'')}</option>`).join('');
+    if (sel.dataset.h !== html){ sel.innerHTML = html; sel.dataset.h = html; sel.value = cur; }
+  }
+}
+const SEC = [['understanding','1. Hiểu việc'],['clarifications','2. Cần làm rõ'],['plan','3. Kế hoạch'],['assignments','4. Phân công'],['decisions_needed','5. Cần anh/chị quyết định']];
+function list(v){ if (!Array.isArray(v)) return esc(v||'—');
+  if (!v.length) return '<span class="muted">(không)</span>';
+  return '<ul>'+v.map(x=>`<li>${typeof x==='object' ? `<b>${esc(nameOf(x.agent))}</b>: ${esc(x.task||x.what||JSON.stringify(x))}` : esc(x)}</li>`).join('')+'</ul>'; }
+function cosHTML(rep){ return '<ol style="list-style:none;padding:0">'+SEC.map(([k,t])=>`<li><b>${t}</b>${k==='understanding'?`<div>${esc(rep[k]||'—')}</div>`:list(rep[k])}</li>`).join('')+'</ol>'; }
+function bubble(cls, html, pj){ const d = document.createElement('div'); d.className = 'bub '+cls; d.innerHTML = (pj?`<div class="pj">${esc(pj)}</div>`:'')+html;
+  $('chatLog').appendChild(d); $('chatLog').scrollTop = $('chatLog').scrollHeight; return d; }
+async function send(){
+  const msg = $('chatIn').value.trim(); if (!msg) return;
+  const pj = $('chatProj').value || null;
+  bubble('me', esc(msg), pj); $('chatIn').value = ''; $('chatSend').disabled = true;
+  const wait = bubble('cos', '<span class="muted">CoS đang đọc tình hình…</span>');
+  const r = await post('/api/cos/chat', {message:msg, project:pj}).catch(e=>({ok:false,j:{error:String(e)}}));
+  $('chatSend').disabled = false;
+  if (!r.ok){ wait.innerHTML = `<span class="msgErr">${esc(r.j.error==='NOT_READY' ? r.j.reason : r.j.error)}</span>`; return; }
+  wait.innerHTML = r.j.ok ? cosHTML(r.j.reply) : `<span class="msgErr">CoS trả lỗi: ${esc(r.j.error)} — ${esc(r.j.reason)}</span>`;
+}
+$('chatSend').onclick = send;
+$('chatIn').addEventListener('keydown', e=>{ if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); } });
+
+// ---- Giao việc (brief → CoS soạn lead_brief → người XAC NHAN) ----
+let BRIEF = null;
+function closeSheets(){ $('sheetBrief').classList.remove('on'); $('sheetSide').classList.remove('on'); }
+$('btnBrief').onclick = ()=>{ const s=$('sheetBrief'); const on = !s.classList.contains('on'); closeSheets(); if (on){ s.classList.add('on'); briefForm(); } };
+function briefForm(){
+  BRIEF = null;
+  $('sheetBrief').innerHTML = `<h3>Giao việc mới — brief</h3>
+    <div class="grid2"><label>Client<input id="bClient" autocomplete="off"></label><label>Nguồn (email, call…)<input id="bSource" autocomplete="off"></label></div>
+    <label style="margin-top:6px">Ngày nhận (trống = hôm nay)<input id="bDate" type="date"></label>
+    <label style="margin-top:6px">Nội dung<textarea id="bContent" rows="4" placeholder="Dán nội dung yêu cầu của khách…"></textarea></label>
+    <label style="margin-top:6px">File .md / .txt (tuỳ chọn)<input id="bFile" type="file" accept=".md,.txt,.markdown,text/plain,text/markdown"></label>
+    <div class="row" style="margin-top:8px"><button class="b" id="bDraft">Nhờ CoS soạn bản xem trước</button><button class="b ghost" id="bClose">Đóng</button><span id="bMsg"></span></div>
+    <div id="bPreview"></div>`;
+  $('bClose').onclick = closeSheets; $('bDraft').onclick = draftBrief;
+}
+async function draftBrief(){
+  const f = $('bFile').files[0]; let ftext = '', fname = '';
+  if (f){ if (!/\.(md|txt|markdown)$/i.test(f.name)){ $('bMsg').innerHTML = '<span class="msgErr">chỉ nhận .md / .txt</span>'; return; }
+    if (f.size > 200000){ $('bMsg').innerHTML = '<span class="msgErr">file quá lớn (≤200KB)</span>'; return; }
+    ftext = await f.text(); fname = f.name; }
+  $('bMsg').innerHTML = '<span class="muted">CoS đang soạn…</span>'; $('bDraft').disabled = true;
+  const r = await post('/api/cos/brief', {client:$('bClient').value, source:$('bSource').value, received_at:$('bDate').value, content:$('bContent').value, file_name:fname, file_text:ftext});
+  $('bDraft').disabled = false;
+  if (!r.ok){ $('bMsg').innerHTML = `<span class="msgErr">${esc(r.j.error)}</span>`; return; }
+  $('bMsg').textContent = ''; BRIEF = r.j;
+  const d = r.j.draft;
+  $('bPreview').innerHTML = `<div class="card" style="margin-top:8px"><h3>Bản xem trước lead_brief (chưa ghi gì)</h3>
+    <div class="muted">client <b>${esc(d.client)}</b> · nguồn <b>${esc(d.source)}</b> · ngày ${esc(d.received_at)}${d.attachments?` · file ${esc(d.attachments.join(', '))}`:''}</div>
+    <details open><summary>Nội dung</summary><pre>${esc(d.description)}</pre></details>
+    <details ${r.j.cos.ok?'open':''}><summary>CoS hiểu việc (5 mục)</summary>${r.j.cos.ok?cosHTML(r.j.cos.reply):`<span class="msgErr">${esc(r.j.cos.error)}: ${esc(r.j.cos.reason)}</span>`}</details>
+    <div class="confirm"><b>Chỉ NGƯỜI tạo dự án.</b> Gõ tên của chính bạn và gõ <b>${CONFIRM}</b>.
+      <div class="grid2" style="margin-top:6px"><label>Mã dự án<input id="bId" value="${esc(r.j.suggested_id)}" autocomplete="off"></label>
+      <label>Tên người xác nhận<input id="bWho" autocomplete="off"></label></div>
+      <label style="margin-top:6px">Gõ ${CONFIRM}<input id="bOk" autocomplete="off"></label>
+      <div class="row" style="margin-top:8px"><button class="b ok" id="bCreate">Tạo dự án</button><span id="bMsg2"></span></div></div></div>`;
+  $('bCreate').onclick = createProject;
+}
+async function createProject(){
+  const r = await post('/api/cos/brief/confirm', {draft:BRIEF.draft, payload_hash:BRIEF.payload_hash, id:$('bId').value, confirmed_by:$('bWho').value, typed_confirm:$('bOk').value});
+  if (!r.ok){ $('bMsg2').innerHTML = `<span class="msgErr">${esc(r.j.error)}</span>`; return; }
+  closeSheets(); bubble('sys', `Đã tạo dự án <b>${esc(r.j.project)}</b> (INTAKE) · người xác nhận: ${esc(r.j.confirmed_by)}. ${esc(r.j.next)}`);
+}
+
+// ---- Giao việc phụ cho role ----
+$('btnSide').onclick = ()=>{ const s=$('sheetSide'); const on = !s.classList.contains('on'); closeSheets(); if (on){ s.classList.add('on'); sideForm(); } };
+function sideForm(pid){
+  const ps = VIEW.projects.filter(p=>p.state!=='ABANDONED');
+  $('sheetSide').innerHTML = `<h3>Giao việc phụ / điều tra cho một role</h3>
+    <div class="muted" style="margin-bottom:6px">Agent chạy <b>chỉ đọc</b>, kết quả là note — không sửa sản phẩm. Việc phụ chạy khi role rảnh (việc chính ưu tiên).</div>
+    <div class="grid2"><label>Dự án<select id="sProj">${ps.map(p=>`<option value="${esc(p.id)}"${p.id===(pid||$('chatProj').value)?' selected':''}>${esc(p.id)} · ${esc(p.state||'')}</option>`).join('')}</select></label>
+    <label>Role<select id="sRole">${VIEW.agents.map(a=>`<option value="${esc(a.id)}">${esc(a.name)} (${esc(a.id)})</option>`).join('')}</select></label></div>
+    <div class="grid2" style="margin-top:6px"><label>Loại<select id="sKind"><option value="side">việc phụ (khi role rảnh)</option><option value="main">việc chính</option></select></label>
+    <label>Tiêu đề<input id="sTitle" autocomplete="off"></label></div>
+    <label style="margin-top:6px">Chi tiết<textarea id="sDetail" rows="3"></textarea></label>
+    <div class="confirm"><b>Chỉ NGƯỜI giao.</b><div class="grid2" style="margin-top:6px"><label>Tên người giao<input id="sWho" autocomplete="off"></label>
+      <label>Gõ ${CONFIRM}<input id="sOk" autocomplete="off"></label></div></div>
+    <div class="row" style="margin-top:8px"><button class="b" id="sAdd">Giao việc</button><button class="b ghost" id="sClose">Đóng</button><span id="sMsg"></span></div>`;
+  if (!ps.length) $('sMsg').innerHTML = '<span class="msgErr">chưa có dự án</span>';
+  $('sClose').onclick = closeSheets;
+  $('sAdd').onclick = async ()=>{
+    const pid = $('sProj').value; if (!pid) return;
+    const r = await post(`/api/projects/${encodeURIComponent(pid)}/side-tasks`, {role:$('sRole').value, kind:$('sKind').value, title:$('sTitle').value, detail:$('sDetail').value, confirmed_by:$('sWho').value, typed_confirm:$('sOk').value});
+    if (!r.ok){ $('sMsg').innerHTML = `<span class="msgErr">${esc(r.j.error)}</span>`; return; }
+    closeSheets(); bubble('sys', `Đã giao <b>${esc(r.j.task.id)}</b> (${esc(r.j.task.kind)}) cho ${esc(nameOf(r.j.task.role))} ở ${esc(pid)}: ${esc(r.j.task.title)}. Scheduler chạy khi role rảnh; xem tab Việc.`);
+  };
+}
+
+// ---------------- Việc ----------------
+function stCls(p){ return p.escalated?'esc':p.gate?'gate':(p.working&&p.working.length)?'run':''; }
+function renderWork(){
+  const by = {}; VIEW.tasks.forEach(t=>(by[t.project]=by[t.project]||[]).push(t));
+  const projHTML = VIEW.projects.map(p=>`<div class="proj ${p.escalated?'esc':''}" data-p="${esc(p.id)}"><div class="ph">${esc(p.id)}
+      <span class="st ${stCls(p)}">${p.escalated?'! ESCALATED':esc(p.state||'')}</span>${p.gate?`<span class="st gate">⏳ ${esc(p.gate)}</span>`:''}
+      <span class="muted" style="margin-left:auto;font-weight:600">${p.working&&p.working.length?'đang làm: '+esc(p.working.map(nameOf).join(', ')):''}</span></div>
+      ${(by[p.id]||[]).map(t=>`<div class="t"><span class="id">${esc(String(t.id).replace(p.id+':',''))}</span>
+        <span class="tt" title="${esc(t.title)}">${esc(t.title||'—')}${t.kind==='side'?'<span class="kd">phụ</span>':''}</span><span class="chip c-${esc(t.status)}">${esc(t.status)}</span>
+        <span class="meta">${t.owner_agent?esc(nameOf(t.owner_agent)):'chưa giao'}${t.note?` · note: ${esc(t.note)}`:''}${t.reason?` · lỗi: ${esc(t.reason)}`:''}</span></div>`).join('') || '<div class="t"><span class="meta">chưa có task</span></div>'}
+      ${p.escalated?`<div class="t"><span class="meta"><a href="#" data-inc="${esc(p.id)}">→ mở tab Sự cố</a></span></div>`:''}</div>`).join('');
+  const ag = VIEW.agents.filter(a=>a.status!=='idle').map(a=>`<div class="ag"><b>${esc(a.name)}</b><span class="chip s-${esc(a.status)}">${esc(a.status)}</span>
+      <span class="meta">${a.main&&a.main.length?`chính: <b>${esc(a.main.join(', '))}</b> `:''}${a.side&&a.side.length?`· phụ: <b>${esc(a.side.join(', '))}</b>`:''}${!a.main?.length&&!a.side?.length?esc((a.work||[]).map(w=>w.project+' '+w.status).join(' · ')):''}</span></div>`).join('');
+  $('workBody').innerHTML = (VIEW.projects.length ? projHTML : '<div class="empty">Chưa có dự án — Chat CoS → ＋ Giao việc.</div>')
+    + `<div class="card"><h3>Nhân sự (mỗi role 1 việc chính + việc phụ khi rảnh)</h3>${ag || '<div class="empty">Mọi agent đang rảnh.</div>'}
+      <div class="row" style="margin-top:8px"><button class="b ghost" id="wSide">＋ Giao việc phụ</button></div></div>`;
+  $('workBody').querySelectorAll('[data-inc]').forEach(a=>a.onclick=e=>{ e.preventDefault(); INC_FOCUS=a.dataset.inc; tab('incident'); });
+  $('wSide').onclick = ()=>{ tab('chat'); closeSheets(); $('sheetSide').classList.add('on'); sideForm(); };
+}
+
+// ---------------- Gate ----------------
+let GV = null;
+const pre = v => `<pre>${esc(JSON.stringify(v,null,2))}</pre>`;
+function gateList(){
+  const sel = $('gProj'), cur = sel.value || Q.get('project');
+  const ps = [...VIEW.gates.map(g=>VIEW.projects.find(p=>p.id===g.project)).filter(Boolean), ...VIEW.projects.filter(p=>!p.gate)];
+  const html = ps.map(p=>`<option value="${esc(p.id)}">${p.gate?'⏳ ':''}${esc(p.id)} · ${esc(p.state||'')}</option>`).join('') || '<option value="">(chưa có dự án)</option>';
+  if (sel.dataset.h !== html){ sel.innerHTML = html; sel.dataset.h = html; if (cur && [...sel.options].some(o=>o.value===cur)) sel.value = cur; return true; }
+  return false;
+}
+async function loadGate(){
+  gateList(); const pid = $('gProj').value; $('gMsg').innerHTML = '';
+  if (!pid){ $('gBody').innerHTML = '<div class="muted">chưa có dự án</div>'; return; }
+  const r = await api('/api/projects/'+encodeURIComponent(pid)+'/gate'); GV = r.j;
+  if (!r.ok){ $('gBody').innerHTML = `<div class="msgErr">${esc(GV.error)}</div>`; return; }
+  if (!GV.gate && GV.awaiting_run){ $('gBody').innerHTML = `<div>${esc(GV.awaiting_run)} đã ký — scheduler chạy tiếp (hoặc <code>${esc(GV.next)}</code>).</div>`; return; }
+  if (!GV.gate){ $('gBody').innerHTML = `<div>State <b>${esc(GV.state)}</b> — không có gate đang chờ. Đã ký: ${esc((GV.gates_signed||[]).join(', ')||'(chưa)')}</div>`; return; }
+  const p = GV.packet;
+  $('gBody').innerHTML = `<h3>▶ ${esc(GV.gate)} — chờ ${esc(GV.signer_role)} · ${esc(GV.project)} · ${esc(GV.state)}</h3>
+    <div class="confirm" style="margin-top:0"><b>Người duyệt thấy trước:</b>${pre(p.highlights)}</div>
+    <details><summary>decision_records (${p.decision_records.length}) — RECOMMENDATION từ huddle, người quyết</summary>${pre(p.decision_records)}</details>
+    ${Object.entries(p.zones).map(([z,v])=>`<details><summary>zone <code>${esc(z)}</code>${v==null?' (trống)':''}</summary>${pre(v)}</details>`).join('')}
+    <div class="muted" style="margin:6px 0">packet_hash <code>${esc(GV.packet_hash)}</code> — dữ liệu đổi trước khi bấm → bị từ chối, tải lại.</div>
+    <div class="grid2"><label>Tên người ký (chính bạn)<input id="gSigner" autocomplete="off"></label><label>Gõ ${CONFIRM}<input id="gConfirm" autocomplete="off"></label>
+      <label>Ghi chú khi duyệt<input id="gNote"></label><label style="display:flex;gap:6px;align-items:center;margin-top:16px"><input type="checkbox" id="gEdited" style="width:auto"> Tôi đã sửa output trước khi duyệt</label>
+      <label>Lý do trả lại<textarea id="gReason" rows="2"></textarea></label>
+      <label>Trả về phase<select id="gBack">${GV.backtrack_options.map(s=>`<option ${s===GV.backtrack_default?'selected':''}>${esc(s)}</option>`).join('')}</select></label></div>
+    <div class="row" style="margin-top:10px"><button class="b ok" id="gOk">Duyệt ${esc(GV.gate)}</button><button class="b bad" id="gNo">Trả lại</button></div>`;
+  $('gOk').onclick = ()=>decide('approve'); $('gNo').onclick = ()=>decide('reject');
+}
+async function decide(d){
+  const body = {signer:$('gSigner').value, typed_confirm:$('gConfirm').value, packet_hash:GV.packet_hash};
+  if (d==='approve'){ body.edited = $('gEdited').checked; body.note = $('gNote').value||null; } else { body.reason = $('gReason').value; body.backtrack_to = $('gBack').value; }
+  const r = await post(`/api/projects/${encodeURIComponent(GV.project)}/gate/${GV.gate}/${d}`, body);
+  if (!r.ok){ $('gMsg').innerHTML = `<div class="card msgErr">${esc(r.j.error)}</div>`; return; }
+  await loadGate(); $('gMsg').innerHTML = `<div class="card msgOk">${d==='approve'?'Đã duyệt':'Đã trả lại → '+esc(r.j.backtrack_to)} ${esc(r.j.gate)} · ${esc(r.j.signer)}. Scheduler chạy tiếp.</div>`;
+}
+$('gProj').onchange = loadGate; $('gRef').onclick = loadGate;
+
+// ---------------- Sự cố (ESCALATED) ----------------
+let INC_FOCUS = Q.get('tab')==='incident' ? Q.get('project') : null, INC = {}, INC_KEY = '';
+async function renderIncidents(force){
+  const key = VIEW.escalated.join(',');
+  if (!force && key===INC_KEY) return; INC_KEY = key;
+  if (!VIEW.escalated.length){ $('incBody').innerHTML = '<div class="empty">Không có dự án ESCALATED. Dự án ESCALATED hiện “!” đỏ trong phòng 3D — bấm vào để mở thẳng tab này.</div>'; return; }
+  const views = await Promise.all(VIEW.escalated.map(pid=>api('/api/projects/'+encodeURIComponent(pid)+'/escalation').then(r=>[pid,r])));
+  $('incBody').innerHTML = `<div class="muted" style="margin-bottom:8px">Chỉ NGƯỜI gỡ (CLAUDE.md luật 10): gõ tên + <b>${CONFIRM}</b>. Gỡ xong (retry/quay về) scheduler tự chạy tiếp. Terminal: <code>python -m src.ops.escalation resolve</code>.</div>`
+    + views.map(([pid,r])=>{ const v = r.j; INC[pid] = v;
+      if (!r.ok || !v.escalated) return `<div class="card" data-p="${esc(pid)}"><b>${esc(pid)}</b> — ${esc(v.error||('state '+v.state))}</div>`;
+      const back = (v.options||[]).filter(o=>o.startsWith('backtrack:'));
+      return `<div class="card proj esc" data-p="${esc(pid)}" style="padding:0"><div class="ph">${esc(pid)} <span class="st esc">! ESCALATED</span></div><div style="padding:10px">
+        <div><b>Lý do:</b> ${esc(v.reason||'(không rõ)')}</div>
+        <div class="muted">phase lỗi: <b>${esc(v.from_state||'?')}</b> · agent: <b>${esc(v.agent||'?')}</b> · hash <code>${esc((v.packet_hash||'').slice(0,19))}…</code></div>
+        <div class="grid2" style="margin-top:8px"><label>Tên người quyết<input data-f="who" autocomplete="off"></label><label>Gõ ${CONFIRM}<input data-f="ok" autocomplete="off"></label></div>
+        <label style="margin-top:6px">Ghi chú<input data-f="note"></label>
+        <div class="row" style="margin-top:8px">
+          <button class="b warn" data-act="retry" ${(v.options||[]).includes('retry')?'':'disabled'} title="Chạy lại agent lỗi (tier cao hơn nếu routing cho phép)">↻ Retry</button>
+          <select data-f="back" style="width:auto">${back.map(o=>`<option value="${esc(o)}">${esc(o.replace('backtrack:','về '))}</option>`).join('')}</select>
+          <button class="b ghost" data-act="back" ${back.length?'':'disabled'}>⤺ Quay về phase</button>
+          <button class="b bad" data-act="abandon" title="Đóng dự án (ABANDONED)">✕ Huỷ dự án</button></div>
+        <div data-f="msg" style="margin-top:6px"></div></div></div>`; }).join('');
+  $('incBody').querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>resolveInc(b));
+  if (INC_FOCUS){ const el = $('incBody').querySelector(`[data-p="${CSS.escape(INC_FOCUS)}"]`);
+    if (el){ el.scrollIntoView({block:'start'}); el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'),1500); } INC_FOCUS = null; }
+}
+async function resolveInc(btn){
+  const card = btn.closest('[data-p]'), pid = card.dataset.p, f = n => card.querySelector(`[data-f="${n}"]`);
+  const action = btn.dataset.act==='back' ? f('back').value : btn.dataset.act;
+  const r = await post(`/api/projects/${encodeURIComponent(pid)}/escalation/${encodeURIComponent(action)}`,
+    {signer:f('who').value, typed_confirm:f('ok').value, note:f('note').value||null, packet_hash:(INC[pid]||{}).packet_hash});
+  if (!r.ok){ f('msg').innerHTML = `<span class="msgErr">${esc(r.j.error)}</span>`; return; }
+  f('msg').innerHTML = `<span class="msgOk">Đã gỡ: ${esc(r.j.action)} → ${esc(r.j.state)} · ${esc(r.j.signer)}</span>`;
+  setTimeout(()=>renderIncidents(true), 1200);
+}
+
+// ---------------- Token ----------------
+function renderToken(){
+  const u = VIEW.usage || {}; const bp = Object.entries(u.by_project||{}).sort((a,b)=>b[1].total-a[1].total);
+  const mx = bp.length ? Math.max(1, bp[0][1].total) : 1;
+  const ag = Object.entries(u.by_agent||{}), amx = ag.length ? Math.max(1, ag[0][1]) : 1;
+  $('tokBody').innerHTML = `<div class="card"><div class="muted">Tổng mọi dự án (chi phí ƯỚC TÍNH theo config/pricing.yaml)</div>
+      <div class="big">${fmtTok(u.total)} <span class="muted" style="font-size:13px">token · ${u.calls||0} lần gọi · ${fmtUsd(u.est_cost_usd)}</span></div>
+      <div class="muted">in ${fmtTok(u.tokens_in)} · out ${fmtTok(u.tokens_out)} · ${Object.entries(u.by_tier||{}).map(([t,v])=>`${esc(t)} ${fmtTok(v.total)}`).join(' · ')}</div></div>
+    <div class="card"><h3>Theo dự án</h3>${bp.map(([p,v])=>`<div class="tr"><div class="row"><b>${esc(p)}</b><span>${fmtTok(v.total)} · ${fmtUsd(v.est_cost_usd)}${v.ratio!=null?` · ${(v.ratio*100).toFixed(0)}% budget`:''}</span></div>
+      <div class="bar"><i style="width:${(v.total/mx*100).toFixed(0)}%;${v.ratio>=1?'background:#C0392B':v.ratio>=0.8?'background:#D9A21B':''}"></i></div></div>`).join('') || '<div class="empty">Chưa có lần gọi model.</div>'}</div>
+    <div class="card"><h3>Top agent</h3>${ag.map(([a,n])=>`<div class="tr"><div class="row"><span>${esc(nameOf(a))}</span><span>${fmtTok(n)}</span></div><div class="bar"><i style="width:${(n/amx*100).toFixed(0)}%"></i></div></div>`).join('') || '<div class="empty">—</div>'}</div>`;
+}
+start();
+</script></body></html>

@@ -26,6 +26,8 @@
 ## Vận hành hằng ngày (Chief)
 - Bắt đầu: `START_HERE.md`. Lịch một ngày + xử lý sự cố: `docs/ops/runbook-daily.md`.
 - Skills: `.claude/skills/` — `chief-daily` (tổng), `flow-new-project`, `flow-daily-report`, `flow-room`, `flow-new-bot`.
+- Control Room (1 trang): `uvicorn src.server.app:app` → `/`; chạy nền đa dự án `python -m src.ops.scheduler run`;
+  gỡ ESCALATED chỉ NGƯỜI: tab Sự cố hoặc người tự gõ `python -m src.ops.escalation resolve` (Claude KHÔNG chạy).
 - CLI: `python -m src.ops.project|report|prune|doctor`. Gate G1–G4 chỉ NGƯỜI ký (luật 10), 2 đường: dashboard tab
   "Gate dự án" hoặc người tự gõ `python -m src.ops.gate sign|reject` (bắt TTY). Claude KHÔNG chạy lệnh/API ký.
 - Dữ liệu công ty ở lại account công ty; ra ngoài chỉ bản `report daily --redact`.

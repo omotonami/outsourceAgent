@@ -4,16 +4,22 @@
 Mọi lệnh chạy ở gốc repo, venv đã bật. Event store: `config/runtime.yaml → eventstore.path`
 (mặc định `data/runtime/events.sqlite3`) hoặc env `OA_EVENTSTORE_PATH` — CLI `src.ops` và dashboard phải trỏ cùng file.
 
+## Control Room (đợt 2026-11-04): mở 1 trang là đủ
+`uvicorn src.server.app:app` → `http://localhost:8000/` + `python -m src.ops.scheduler run` chạy nền (không 2 scheduler
+cùng lúc — khoá file). Chat CoS, giao việc (brief → CoS soạn → người `XAC NHAN`), giao việc phụ, Gate, Sự cố, Token ở một
+trang; xem `docs/control-room.md`. Bảng dưới vẫn đúng khi làm bằng lệnh.
+
 ## Lịch một ngày
 | Lúc | Việc | Lệnh | Ai |
 |---|---|---|---|
 | Sáng | Kiểm môi trường | `python -m src.ops.doctor` | Claude chạy, FAIL → báo người |
 | Sáng | Báo cáo ngày (nội bộ) | `python -m src.ops.report daily --all --out docs/reports/$(date +%F).md` | Claude chạy, tóm tắt "Việc cần người quyết" |
-| Sáng | Ký / trả lại gate đang chờ | dashboard tab "Gate dự án" hoặc `python -m src.ops.gate sign\|reject --id P-... --gate Gx` (terminal của người) | **Người** — Claude không chạy |
-| Trong ngày | Nhận việc mới | `python -m src.ops.project new --brief data/runtime/briefs/x.yaml` → `run --id P-...` | Claude (brief do người cung cấp) |
+| Sáng | Ký / trả lại gate đang chờ | Control Room tab "Gate" hoặc `python -m src.ops.gate sign\|reject --id P-... --gate Gx` (terminal của người) | **Người** — Claude không chạy |
+| Trong ngày | Nhận việc mới | Control Room ＋ Giao việc (người `XAC NHAN`) hoặc `python -m src.ops.project new --brief data/runtime/briefs/x.yaml` → scheduler / `run --id P-...` | Người xác nhận / Claude (brief do người cung cấp) |
+| Trong ngày | Việc phụ / điều tra cho role | Control Room ＋ Giao việc phụ hoặc `python -m src.ops.project task add --id P-... --role <agent> --title "..."` → scheduler chạy khi role rảnh, ra note (`task list`) | Người giao |
 | Trong ngày | Huddle khi người yêu cầu | `python -m src.ops.project huddle --id P-... --phase presales\|discovery` | Claude, người quyết kết quả |
 | Trong ngày | Tạo bot mới | soạn answers → người chạy `python -m src.factory.new ... --write --create-branch` | Claude soạn, **người** xác nhận |
-| Chiều | Chạy tiếp dự án không ở gate | `python -m src.ops.project list` → `run --id P-...` | Claude |
+| Chiều | Chạy tiếp dự án không ở gate | scheduler đang chạy thì tự làm; không thì `python -m src.ops.scheduler run --once` hoặc `project run --id P-...` | Claude |
 | Chiều | Bản mang ra ngoài (nếu cần) | `python -m src.ops.report daily --all --redact --out docs/reports/$(date +%F)-redact.md` | Claude tạo, người đọc lại rồi mới gửi |
 | Tối | Retention (PDPA) | `python -m src.ops.prune` (bản nháp cũ hơn `retention.drafts_days` = 30) | Claude |
 | Khi đóng dự án | Xoá hay trả dữ liệu client | `python -m src.ops.prune --closed-project P-...` | **Người quyết**, rồi mới chạy |
@@ -26,7 +32,7 @@ Chỉ NGƯỜI ký/trả lại. Cả hai đường đi qua lõi `src/ops/gate.py
 
 | Đường | Người làm | Kiểm |
 |---|---|---|
-| Dashboard | `uvicorn src.server.app:app` → `http://localhost:8000/?project=P-...` → tab **Gate dự án**: xem highlights (ASSUMPTION, exclusions, open_questions, finding High...), zone output, decision_records (không transcript) → gõ tên + `XAC NHAN` → Duyệt / Trả lại (lý do + phase quay về) | `POST /api/projects/{id}/gate/{gate}/{approve\|reject}`: thiếu `XAC NHAN` / tên máy → 400; sai gate / dữ liệu đổi (packet_hash) / guard → 409 |
+| Dashboard | `uvicorn src.server.app:app` → `http://localhost:8000/?tab=gate&project=P-...` → tab **Gate** (cũ: `/legacy` tab Gate dự án): xem highlights (ASSUMPTION, exclusions, open_questions, finding High...), zone output, decision_records (không transcript) → gõ tên + `XAC NHAN` → Duyệt / Trả lại (lý do + phase quay về) | `POST /api/projects/{id}/gate/{gate}/{approve\|reject}`: thiếu `XAC NHAN` / tên máy → 400; sai gate / dữ liệu đổi (packet_hash) / guard → 409 |
 | Terminal | `python -m src.ops.gate sign --id P-... --gate G1 [--edited --note ...]` · `python -m src.ops.gate reject --id P-... --gate G1 --reason "..." [--backtrack-to PRESALES]` → xem tóm tắt + hash → gõ tên → gõ `XAC NHAN` | Bắt TTY; không nhận tên qua tham số; tên máy / gõ sai / EOF / hash đổi giữa chừng → rc 2, không ghi gì |
 
 - **Duyệt không sửa** → `autonomy.record_review` cho agent của gate (lỗi ghi log → risk_register, chữ ký vẫn giữ).
@@ -51,9 +57,9 @@ Dự án ESCALATED không tự chạy tiếp. NGƯỜI chọn 1 trong 3 hành đ
 | Đường | Người làm |
 |---|---|
 | Terminal của NGƯỜI | `python -m src.ops.escalation resolve --id P-... --action retry` (hoặc `--action backtrack:DISCOVERY`, `--action abandon`, thêm `--note "..."`) → xem tóm tắt + hash → gõ tên → gõ `XAC NHAN`. Bắt TTY; không nhận tên qua tham số; tên máy / gõ sai / EOF / tình trạng đổi giữa chừng → rc 2, không ghi gì |
-| Dashboard (API) | `GET /api/projects/{id}/escalation` (lý do, phase lỗi, agent, `options`, `packet_hash`) · `POST /api/projects/{id}/escalation/{retry\|backtrack:PHASE\|abandon}` body `{"signer": "<tên người>", "typed_confirm": "XAC NHAN", "note": "...", "packet_hash": "..."}` → 400 (tên máy / thiếu XAC NHAN / action lạ), 404 (không có dự án), 409 (không ESCALATED / hash đổi). **Chưa có nút UI** — đợt UI bên công ty thêm nút gọi API này |
+| Dashboard (API) | `GET /api/projects/{id}/escalation` (lý do, phase lỗi, agent, `options`, `packet_hash`) · `POST /api/projects/{id}/escalation/{retry\|backtrack:PHASE\|abandon}` body `{"signer": "<tên người>", "typed_confirm": "XAC NHAN", "note": "...", "packet_hash": "..."}` → 400 (tên máy / thiếu XAC NHAN / action lạ), 404 (không có dự án), 409 (không ESCALATED / hash đổi). **Nút UI**: Control Room tab **Sự cố** (Retry / Quay về phase / Huỷ) — 3D hiện `!` ở dự án ESCALATED, bấm mở thẳng tab |
 
-Sau `retry` / `backtrack`: chạy `python -m src.ops.project run --id P-...`. Claude chỉ đưa lệnh cho người: `.claude/settings.json`
+Sau `retry` / `backtrack`: scheduler tự chạy tiếp (không có scheduler: `python -m src.ops.project run --id P-...`). Claude chỉ đưa lệnh cho người: `.claude/settings.json`
 deny `python -m src.ops.escalation` (mọi biến thể đã biết) và curl/wget/http tới `/api/projects/*/escalation*`.
 
 ## Xử lý sự cố
@@ -62,7 +68,9 @@ deny `python -m src.ops.escalation` (mọi biến thể đã biết) và curl/wg
 | `dừng: ESCALATED` | Agent fail schema hết số lượt retry (`config/runtime.yaml → agent_runtime.schema_retries`) hoặc vượt budget | Xem `report daily` / `GET /api/projects/P-.../escalation` (lý do, phase lỗi, agent). **Người** gỡ theo mục "ESCALATED — người gỡ" bên dưới. Máy/Claude không tự gỡ. |
 | `dừng: BLOCKED — guard từ chối ...` | Guard Code (vd `discovery_ready`: AC < 95% Given/When/Then; `presales_ready`: assumption chưa vào proposal) | Đọc lý do; người xử lý đầu vào. **Không nới guard** (luật 4). Chạy lại `run`. |
 | `BLOCKED — task blocked: [...]` | Dispatcher: task fail QC quá `max_build_loops`, KILL quá ttl, dep blocked | `report daily` (bản nội bộ) có lý do từng task. Tech Lead người quyết. |
-| `BLOCKED — lỗi khi chạy: ...API key / Connection` | Thiếu `ANTHROPIC_API_KEY`, proxy/mạng công ty | `python -m src.ops.doctor`; đặt key; kiểm proxy. State không đổi, chạy lại được. |
+| `BLOCKED — lỗi khi chạy: ...` (model không gọi được) | Máy chưa đăng nhập Claude Code, proxy/mạng công ty | `python -m src.ops.doctor`; chạy `claude` và đăng nhập; kiểm proxy. State không đổi; scheduler bỏ qua dự án BLOCKED tới khi store đổi — chạy lại `scheduler run --once` / `project run`. Chat CoS báo "Claude Code chưa sẵn sàng — chạy `claude` và đăng nhập". |
+| `scheduler khác đang chạy` (rc 3) | Đã có process scheduler (khoá `data/runtime/scheduler.lock`) | Dùng process đang chạy (`scheduler status`); muốn chạy lại thì dừng nó (Ctrl-C) trước. |
+| Việc phụ mãi `queued` | Role đang có việc chính (dự án ở phase cần role đó) — đúng thiết kế, ưu tiên việc chính | Chờ role rảnh, hoặc giao `--kind main`. |
 | Vượt budget | `config/budgets.yaml per_project_tokens` có số và đã chạm | Dự án → ESCALATED. Chủ repo quyết nâng số (sửa config + docs/history). Bot không tự đặt số. |
 | Budget null | Chưa đặt số | Không có trần token. `doctor` WARN, report ghi "chưa đặt". Chủ repo đặt sau khi có baseline. |
 | Phòng 3D "0 đang làm" ở presales/discovery | Bản trước đợt field-fixes không ghi sự kiện theo agent | Từ đợt này pipeline ghi ASSIGN/RESULT/BLOCKED mỗi lần gọi agent; agent chỉ "đang làm" trong lúc `run` gọi nó (dừng ở gate → waiting_gate) |

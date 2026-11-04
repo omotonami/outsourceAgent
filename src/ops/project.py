@@ -5,6 +5,9 @@
   python -m src.ops.project huddle --id P-... --phase presales|discovery [--question "..."] [--mock]
   python -m src.ops.project list
   python -m src.ops.project status --id P-...
+  python -m src.ops.project task add --id P-... --role b4_tech_lead --title "..." [--detail "..."] [--kind side|main]
+  python -m src.ops.project task list [--id P-...]
+  (task = việc giao thêm cho role; scheduler `python -m src.ops.scheduler run` chạy — agent CHỈ ĐỌC, ra note)
 Exit code: 0 = chạy xong tới điểm dừng bình thường (gate / released / không có gì làm);
            2 = BLOCKED hoặc ESCALATED (cần người); 1 = lỗi đầu vào.
 """
@@ -175,6 +178,39 @@ def cmd_status(a) -> int:
     return 0
 
 
+def cmd_task(a) -> int:
+    from . import side_tasks
+    if a.task_cmd == "add":
+        store = common.open_store(a.db)
+        if not common.exists(store, a.id):
+            print(f"LỖI: không có project {a.id}", file=sys.stderr)
+            return 1
+        b = common.resume(store, a.id)
+        if common.state_of(b) == "ABANDONED":
+            print(f"LỖI: project {a.id} đã ABANDONED", file=sys.stderr)
+            return 1
+        try:
+            t = side_tasks.add(b, a.role, a.title, detail=a.detail or "", kind=a.kind, via="cli")
+        except side_tasks.TaskError as e:
+            print(f"LỖI: {e}", file=sys.stderr)
+            return 1
+        print(f"Đã xếp hàng {t['id']} ({t['kind']}) cho {t['role']} ở {a.id}: {t['title']}")
+        print("Scheduler chạy khi role rảnh: python -m src.ops.scheduler run [--once] [--mock]")
+        return 0
+    store = common.open_store(a.db, readonly=True)
+    pids = [a.id] if a.id else sorted(p["id"] for p in store.projects())
+    n = 0
+    for pid in pids:
+        for t in side_tasks.tasks(Blackboard.load(pid, store)):
+            n += 1
+            print(f"{pid:<24} {t['id']:<9} {t['kind']:<5} {t['role']:<14} {t['status']:<8} {t['title']}")
+            if t.get("note"):
+                print(f"{'':<24} → {t['note'].get('summary')}")
+    if not n:
+        print("(chưa có task giao thêm)")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m src.ops.project", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -195,8 +231,19 @@ def main(argv=None) -> int:
     sub.add_parser("list", parents=[db])
     p = sub.add_parser("status", parents=[db])
     p.add_argument("--id", required=True)
+    p = sub.add_parser("task", help="việc giao thêm cho role (việc phụ / điều tra)")
+    ts = p.add_subparsers(dest="task_cmd", required=True)
+    q = ts.add_parser("add", parents=[db])
+    q.add_argument("--id", required=True)
+    q.add_argument("--role", required=True, help="agent_id, vd b4_tech_lead")
+    q.add_argument("--title", required=True)
+    q.add_argument("--detail", default=None)
+    q.add_argument("--kind", default="side", choices=["side", "main"])
+    q = ts.add_parser("list", parents=[db])
+    q.add_argument("--id", default=None)
     a = ap.parse_args(argv)
-    return {"new": cmd_new, "run": cmd_run, "huddle": cmd_huddle, "list": cmd_list, "status": cmd_status}[a.cmd](a)
+    return {"new": cmd_new, "run": cmd_run, "huddle": cmd_huddle, "list": cmd_list, "status": cmd_status,
+            "task": cmd_task}[a.cmd](a)
 
 
 if __name__ == "__main__":

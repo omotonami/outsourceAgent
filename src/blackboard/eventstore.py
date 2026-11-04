@@ -225,8 +225,9 @@ _DEFAULT: dict[Path, EventStore] = {}
 _BY_PROJECT: dict[str, EventStore] = {}     # project → store của Blackboard ghi xuyên (cho trace gateway)
 
 
-def register(project_id: str, store: EventStore) -> None:
-    """Blackboard có store gọi lúc khởi tạo: trace gateway của project này cũng vào store đó."""
+def register(project_id: str, store: EventStore | None) -> None:
+    """Blackboard có store gọi lúc khởi tạo: trace gateway của project này cũng vào store đó.
+    store=None: project ảo (vd chat CoS không gắn dự án) — trace KHÔNG vào store nào."""
     _BY_PROJECT[project_id] = store
 
 

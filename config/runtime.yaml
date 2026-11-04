@@ -11,4 +11,4 @@ eventstore:
 # Runtime agent (src/agents/runtime.py). Output model sai JSON/schema → gọi lại tối đa schema_retries lần
 # (tổng lượt = 1 + schema_retries) với thông báo lỗi khoá gốc rõ ràng; vẫn sai → SCHEMA_FAIL → ESCALATED.
 agent_runtime:
-  schema_retries: 1        # giữ mặc định cũ (max_retries=1); chủ repo đổi số ở đây
+  schema_retries: 2        # khớp card "retry ≤ 2" — chủ repo duyệt 2026-11-04 (đợt Control Room)

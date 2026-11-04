@@ -4,7 +4,8 @@ Code thuần, không LLM, không ghi Blackboard. Event tái dùng summary của 
 chỉ summary ≤ MAX_SUMMARY, không raw thinking/transcript/prompt/contract — rồi gắn thêm `from`/`to`
 để view biết nhân vật nào đi tới bàn ai.
 
-  agents  {id, name, role, phase, status, current_task, tasks, level}
+  agents  {id, name, role, phase, status, current_task, tasks, level, kind}
+          kind = main | side (việc chính / việc phụ — scheduler đa dự án) khi đang làm/bị chặn, không thì None
           status ∈ STATUSES, ưu tiên: blocked > waiting_gate > working > idle
   tasks   {id, title, status, owner_agent, deps, owns, risk_level}
   events  {id, ts, type, from, to, summary, task_id, parent, agent, source}
@@ -75,6 +76,28 @@ def tasks(board) -> list[dict]:
                     "deps": list(t.get("deps") or []), "owns": list(t.get("owns") or []),
                     "risk_level": t.get("risk_level")})
     return out
+
+
+SIDE_ZONE = "side_tasks"          # src/ops/side_tasks.py (writer orchestrator, append-only)
+
+
+def side_tasks(board) -> list[dict]:
+    """Task giao thêm (zone side_tasks): bản ghi cuối mỗi id = trạng thái (queued/started/done/failed).
+    Nguồn duy nhất cho src/ops/side_tasks.tasks và Phòng 3D."""
+    by: dict[str, dict] = {}
+    for e in board.get(SIDE_ZONE) or []:
+        i = e.get("id")
+        if not i:
+            continue
+        if e.get("event") == "queued":
+            by[i] = {k: e.get(k) for k in ("id", "role", "title", "detail", "kind", "via", "confirmed_by", "ts")}
+            by[i]["status"] = "queued"
+        elif i in by:
+            by[i]["status"] = e.get("event")
+            for k in ("note", "reason", "tier"):
+                if k in e:
+                    by[i][k] = e[k]
+    return list(by.values())
 
 
 def _with_route(ev: dict, frm, to, *, parent=None, agent=None) -> dict:
@@ -151,6 +174,20 @@ def step_status(board) -> dict:
     return st
 
 
+def step_kinds(board) -> dict:
+    """agent → kind (main|side) của ASSIGN bước phase đang mở (không task_id); ASSIGN cũ không có kind → main."""
+    out: dict = {}
+    for e in board.get("trace_log") or []:
+        if e.get("task_id") or not e.get("agent"):
+            continue
+        kind = str(e.get("event") or "").upper()
+        if kind == EventType.ASSIGN:
+            out[e["agent"]] = e.get("kind") or "main"
+        elif kind in (EventType.RESULT, EventType.BLOCKED):
+            out.pop(e["agent"], None)
+    return out
+
+
 def _risk_blocked_agents(board) -> set:
     return {r.get("source_agent") for r in team_feed.open_risks(board.get("risk_register"))
             if str(r.get("severity") or "").lower() in team_feed.BLOCKING_SEVERITY}
@@ -173,6 +210,7 @@ def snapshot(board, *, active=(), gate: dict | None = None, levels: dict | None 
     gate_agents = set((gate or {}).get("agents") or [])
     risk_blocked = _risk_blocked_agents(board)
     steps = step_status(board)
+    kinds = step_kinds(board)
     agents = []
     for a in (meta if meta is not None else _agent_meta(root)):
         mine = [t for t in ts if t["owner_agent"] == a["id"] and t["status"] in (*WORKER_STATES, BLOCKED)]
@@ -186,7 +224,8 @@ def snapshot(board, *, active=(), gate: dict | None = None, levels: dict | None 
         else:
             status = "idle"
         cur = next((t["id"] for t in mine if t["status"] != BLOCKED), None) or (mine[0]["id"] if mine else None)
+        kind = ("main" if mine else kinds.get(a["id"])) if status in ("working", "blocked") else None
         agents.append({**a, "status": status, "current_task": cur, "tasks": [t["id"] for t in mine],
-                       "level": (levels or {}).get(a["id"])})
+                       "level": (levels or {}).get(a["id"]), "kind": kind})
     return {"phases": PHASES, "statuses": list(STATUSES), "agents": agents, "tasks": ts, "events": evs,
             "gate": ({"id": gate.get("id"), "agents": sorted(gate_agents)} if gate else None)}

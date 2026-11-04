@@ -1,6 +1,6 @@
 """Dashboard thật — FastAPI cắm vào engine Python.
 Hiển thị data flow Blackboard, model routing, gate duyệt/trả lại, token & chi phí THẬT.
-Chạy: uvicorn src.server.app:app --reload   rồi mở http://localhost:8000
+Chạy: uvicorn src.server.app:app --reload   rồi mở http://localhost:8000 (Control Room; dashboard cũ: /legacy)
 Mock mặc định (không tốn token). Đặt LIVE=1 + ANTHROPIC_API_KEY để gọi model thật.
 Kịch bản bước + payload mẫu: src/server/demo.py."""
 import copy
@@ -180,6 +180,13 @@ def reset(dev_high: bool = True):
 
 @app.get("/", response_class=HTMLResponse)
 def index():
+    """Control Room (một trang): Phòng 3D tất cả dự án + Chat CoS | Việc | Gate | Sự cố | Token."""
+    return (HERE/"static"/"control.html").read_text(encoding="utf-8")
+
+
+@app.get("/legacy", response_class=HTMLResponse)
+def legacy():
+    """Dashboard cũ (pipeline demo DASH, Team feed, Gate dự án) — giữ để không vỡ thói quen/link cũ."""
     return (HERE/"static"/"index.html").read_text(encoding="utf-8")
 
 
@@ -300,7 +307,8 @@ def _dash_usage():
 
 
 # ----- Gate dự án thật (event store): NGƯỜI duyệt / trả lại — lõi src/ops/gate.py -----
-# Endpoint DUY NHẤT của server ghi event store. Claude/bot không gọi (.claude/settings.json deny, luật 10).
+# Endpoint ghi event store: gate + escalation (dưới đây) và Control Room (src/server/control.py: tạo project / giao
+# việc phụ, đều cần người gõ tên + XAC NHAN). Claude/bot không gọi (.claude/settings.json deny, luật 10).
 GATE_STORE = None     # test thay bằng EventStore(tmp) ghi được; None → store theo config (ghi được)
 GATE_FEEDBACK_LOG = None    # test thay; None → eval/runs/gate_feedback.jsonl
 GATE_ERR_STATUS = {"machine": 400, "input": 400, "missing": 404, "state": 409, "hash": 409, "guard": 409}
@@ -390,3 +398,9 @@ async def project_escalation_resolve(pid: str, action: str, request: Request):
 @app.get("/room", response_class=HTMLResponse)
 def room_page():
     return (HERE/"static"/"room.html").read_text(encoding="utf-8")
+
+
+# ----- Control Room (trang /): chat CoS, giao việc, Phòng 3D tất cả dự án — src/server/control.py -----
+from src.server import control  # noqa: E402  (import sau khi app + helper đã định nghĩa)
+
+app.include_router(control.router)

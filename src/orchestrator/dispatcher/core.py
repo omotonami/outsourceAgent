@@ -83,7 +83,7 @@ class Dispatcher(Scheduler):
                     t.update(extra)
             self.board.write("task_backlog", tb, agent=AGENT)
 
-    def _event(self, kind: str, task_id: str | None, **fields) -> None:
+    def _event(self, kind: str, task_id: str | None, /, **fields) -> None:
         with self._lock:
             events.emit(self.board, kind, writer=AGENT, by=PARENT, task_id=task_id, **fields)
 

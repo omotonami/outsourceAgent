@@ -8,7 +8,8 @@ Team agent hiển thị như nhân vật low-poly trong một căn phòng: mỗi
 uvicorn src.server.app:app                 # terminal 1 — dashboard, CHỈ ĐỌC event store
 python -m src.demo.live_team --pace 0.8    # terminal 2 — dự án mẫu (huddle + Dispatcher mock, không API key)
 ```
-Mở `http://localhost:8000/room` (tự chọn project đang live) hoặc `/room?project=<id>`.
+Mở `http://localhost:8000/room` (mặc định **Tất cả dự án**: `/api/room/all[/stream]`, mỗi agent 1 nhân vật, chip dự án
+`!` ESCALATED / `⏳` gate) hoặc `/room?project=<id>`. Control Room `/` nhúng `/room?all=1&embed=1` — xem `docs/control-room.md`.
 - **Event store** `src/blackboard/eventstore.py`: SQLite WAL, append-only `(seq, project_id, ts, kind, zone, agent,
   payload_json)`, kind ∈ zone_write/zone_append/event/sign/revoke. Đường dẫn `config/runtime.yaml → eventstore.path`
   (mặc định `data/runtime/events.sqlite3`, gitignore) hoặc env `OA_EVENTSTORE_PATH`. `prune()` = retention gọi tay.

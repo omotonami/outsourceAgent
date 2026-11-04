@@ -8,6 +8,8 @@
   (lỗi / exception) với summary ngắn — không raw output. Phòng 3D (room_state) suy working/idle/blocked từ cặp
   này (task_id rỗng = bước phase; BUILD giữ sự kiện theo task của Dispatcher). Huddle KHÔNG chạy ở đây
   (chỉ khi người gọi `project huddle`, quyết định chủ repo).
+- Đa dự án (src/ops/scheduler.py): `slots.hold(roles, pid, "main")` bao mỗi lần gọi agent (BUILD: cả C1–C3) →
+  trần việc chính/role + số lượt chạy song song (config/scheduler.yaml). Không truyền slots → không giới hạn.
 - Gate: chỉ ĐỌC chữ ký (board.is_signed). Module này không có đường ký gate (luật 10, specs/06_gates.md);
   người ký/trả lại qua src/ops/gate.py (dashboard hoặc terminal tương tác do người gõ).
 - Gate bị trả lại (trace_log DECISION decision=reject, rerun=[phase...]): chạy lại agent của các phase đó dù
@@ -22,6 +24,7 @@
 """
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 
 from src.gateway import budget as ledger
@@ -83,10 +86,22 @@ class Outcome:
 SUMMARY_REASON_MAX = 160
 
 
-def assign(board, agent: str, phase: str, pid: str) -> dict:
-    """ASSIGN cho một bước phase (task_id rỗng) — Phòng 3D thấy agent 'đang làm'."""
+def assign(board, agent: str, phase: str, pid: str, kind: str = "main") -> dict:
+    """ASSIGN cho một bước phase (task_id rỗng) — Phòng 3D thấy agent 'đang làm'. kind: main (bước pipeline)
+    | side (việc phụ, src/ops/side_tasks.py) — scheduler đa dự án (src/ops/scheduler.py)."""
     return events.emit(board, "ASSIGN", writer=WRITER, by=WRITER, agent=agent, phase=phase, project=pid,
-                       **{"from": WRITER, "to": agent})
+                       kind=kind, **{"from": WRITER, "to": agent})
+
+
+class NoSlots:
+    """Không giới hạn (chạy 1 dự án bằng `project run`). Scheduler truyền Slots thật (src/ops/scheduler.py)."""
+
+    @contextlib.contextmanager
+    def hold(self, roles, pid, kind="main"):
+        yield
+
+
+BUILD_ROLES = ("c1_dev", "c2_tester", "c3_qc")      # BUILD: Dispatcher giữ cả 3 role trong suốt lượt chạy
 
 
 def finish(board, agent: str, phase: str, pid: str, res: dict | None = None,
@@ -116,8 +131,9 @@ def _check(res: dict, agent: str) -> dict:
 
 
 class Runner:
-    def __init__(self, store, pid: str, sender=None):
+    def __init__(self, store, pid: str, sender=None, slots=None):
         self.store, self.pid, self.sender = store, pid, sender
+        self.slots = slots or NoSlots()
         self.board = common.resume(store, pid)
         common.seed_ledger(store, pid)
         self.orch = Orchestrator(self.board, common.state_of(self.board))
@@ -175,15 +191,16 @@ class Runner:
         self.current = agent
         kw = self._kw(agent)
         phase = self.PHASES.get(self.orch.state, self.orch.state.lower())
-        assign(self.board, agent, phase, self.pid)
         try:
-            res = fn(kw)
-        except BaseException as e:
-            finish(self.board, agent, phase, self.pid, exc=e)
-            raise
-        else:
-            finish(self.board, agent, phase, self.pid, res)
-            return res
+            with self.slots.hold((agent,), self.pid, "main"):     # RESULT/BLOCKED ghi TRƯỚC khi nhả role
+                assign(self.board, agent, phase, self.pid)
+                try:
+                    res = fn(kw)
+                except BaseException as e:
+                    finish(self.board, agent, phase, self.pid, exc=e)
+                    raise
+                finish(self.board, agent, phase, self.pid, res)
+                return res
         finally:
             if "signals" in kw:
                 events.emit(self.board, "DECISION", writer=WRITER, by=BY_ESCALATION, decision="retry_done",
@@ -238,7 +255,8 @@ class Runner:
     def build(self) -> None:
         self.current = "dispatcher"
         worker = default_pipeline(user_id=USER, sender=self.sender)
-        res = Dispatcher(self.board, worker=worker).run()
+        with self.slots.hold(BUILD_ROLES, self.pid, "main"):
+            res = Dispatcher(self.board, worker=worker).run()
         self.ran.append("dispatcher")
         if res.get("escalation") and "budget" in str(res["escalation"]):
             raise Escalate(f"Dispatcher: {res['escalation']}", "dispatcher")
@@ -320,5 +338,5 @@ class Runner:
         return Outcome(self.pid, self.orch.state, stop, gate=gate, reason=reason, ran=list(self.ran))
 
 
-def run(store, pid: str, sender=None) -> Outcome:
-    return Runner(store, pid, sender).run()
+def run(store, pid: str, sender=None, slots=None) -> Outcome:
+    return Runner(store, pid, sender, slots).run()

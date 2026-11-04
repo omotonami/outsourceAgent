@@ -1,0 +1,18 @@
+# Scheduler đa dự án (src/ops/scheduler.py) — Code thuần, không LLM quyết.
+# Mô hình nhân sự: mỗi role (agent_id) tối đa max_main_per_role "việc chính" (bước pipeline của dự án hoặc
+# task kind=main) chạy cùng lúc + tối đa max_side_per_role "việc phụ" (điều tra chỉ đọc, kind=side).
+# Việc phụ chỉ chạy khi role RẢNH (không có việc chính đang chạy / đang chờ). Không ký gate, không gỡ escalate,
+# không chạy huddle (huddle vẫn gọi tay: python -m src.ops.project huddle).
+scheduler:
+  max_main_per_role: 1       # mỗi role đứng tên tối đa 1 việc chính cùng lúc
+  max_side_per_role: 1       # số việc phụ tối đa / role cùng lúc (khi role rảnh)
+  max_concurrent_calls: 4    # tổng số lượt chạy agent song song (mọi dự án, chính + phụ)
+  max_projects: 8            # số dự án chạy song song tối đa trong một vòng
+  poll_s: 5                  # chế độ chạy nền: nghỉ giữa các vòng (giây)
+  lock_file: scheduler.lock  # tạo cạnh file event store; khoá chống 2 process scheduler
+
+# Control Room (src/server/app.py, trang /): chat với CoS trong app.
+cos_chat:
+  rate_limit_per_min: 10     # số request /api/cos/chat + /api/cos/brief tối đa mỗi phút (toàn server)
+  max_message_chars: 4000    # cắt độ dài tin nhắn người gửi
+  max_brief_chars: 20000     # nội dung brief + file .md/.txt tải lên

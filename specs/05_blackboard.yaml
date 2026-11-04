@@ -19,6 +19,7 @@ zones:
   huddle_log: {writers: ["a1_bu", "a2_estimation", "b1_ba", "b2_ux", "b4_tech_lead", "huddle"], mode: append_only}  # H3: lượt nói {round, agent, role, summary}; không hiển thị ở gate
   decision_records: {writers: ["huddle"], mode: append_only}  # H3: kết quả huddle (specs/04_schemas/decision_record.json); G1/G2 hiển thị
   clarify_answers: {writers: ["clarify"], mode: owner_write}  # Câu trả lời của khách cho câu hỏi Clarify (src/agents/clarify.py)
+  side_tasks: {writers: ["orchestrator"], mode: append_only}  # Việc phụ / điều tra (src/ops/side_tasks.py): queued/started/done/failed + note. KHÔNG phải zone sản phẩm — approved 2026-11-04 (Control Room)
 
 retention:
   drafts_days: 30

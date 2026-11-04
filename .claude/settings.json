@@ -6,6 +6,8 @@
       "Bash(python -m src.ops.project huddle:*)",
       "Bash(python -m src.ops.project list:*)",
       "Bash(python -m src.ops.project status:*)",
+      "Bash(python -m src.ops.project task list:*)",
+      "Bash(python -m src.ops.scheduler status:*)",
       "Bash(python -m src.ops.report:*)",
       "Bash(python -m src.ops.doctor:*)",
       "Bash(python -m src.ops.prune --dry-run:*)",
@@ -62,6 +64,12 @@
       "Bash(http *api/projects/*/gate*)",
       "Bash(python -c *src.ops*gate*)",
       "Bash(python3 -c *src.ops*gate*)",
+      "Bash(curl *api/cos/brief/confirm*)",
+      "Bash(wget *api/cos/brief/confirm*)",
+      "Bash(http *api/cos/brief/confirm*)",
+      "Bash(curl *api/projects/*/side-tasks*)",
+      "Bash(wget *api/projects/*/side-tasks*)",
+      "Bash(http *api/projects/*/side-tasks*)",
       "WebFetch(domain:localhost)",
       "WebFetch(domain:127.0.0.1)"
     ]

@@ -367,7 +367,8 @@ def test_default_pipeline_opus_fail_escalates():
     t = {**_t("H", owns=["h"]), "risk_level": "high"}
     res = Dispatcher(_board([t]), dsp.default_pipeline(sender=bad)).run()
     assert res["blocked"]["H"].startswith("Opus vẫn fail")
-    assert len(calls) == 2                       # 1 lần + 1 retry schema trong runtime, không vòng build nữa
+    from src.agents import runtime
+    assert len(calls) == 1 + runtime.schema_retries()   # 1 lần + retry schema (config) trong runtime, không vòng build nữa
 
 
 # #13 Worker nhận board proxy: không sign/revoke, chỉ ghi zone của agent con

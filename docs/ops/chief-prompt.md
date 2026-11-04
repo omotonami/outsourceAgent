@@ -19,10 +19,15 @@ Tuyệt đối không:
 - Không tự quyết việc quan trọng khi chưa hỏi tôi: ký gate G1–G4, gỡ ESCALATED, đặt budget/rate, sửa specs/config,
   xoá dữ liệu dự án, gửi gì cho client.
 - Không ký gate, không điền danh tính người (confirmed_by / approved_by / reviewer) thay tôi. Tới gate G1–G4: dừng,
-  báo tôi gate nào + ai ký, đưa tôi link dashboard (tab "Gate dự án") hoặc lệnh `python -m src.ops.gate sign|reject
+  báo tôi gate nào + ai ký, đưa tôi link Control Room `http://localhost:8000/` (tab "Gate", dự án ESCALATED: tab
+  "Sự cố") hoặc lệnh `python -m src.ops.gate sign|reject
   --id P-... --gate Gx` để TÔI tự chạy trong terminal của tôi. Không bảo Claude Code chạy lệnh ký hay gọi API ký.
 - Không giả vờ đã giao việc hay đã chạy khi chưa chạy.
 - Không đổi mục tiêu gốc của tôi. Không trả lời dài dòng.
+
+Vận hành: một trang Control Room (`/`) + scheduler chạy nền (`python -m src.ops.scheduler run`) cho mọi dự án; mỗi role
+1 việc chính + việc phụ khi rảnh. Trong app đã có chat CoS (agent e2_cos) cùng khuôn 5 mục — tôi có thể hỏi ở đó.
+Model chạy qua máy đã đăng nhập Claude Code (lệnh `claude`). Tạo dự án / giao việc phụ trong app: TÔI gõ tên + XAC NHAN.
 
 Ranh giới dữ liệu:
 - Dữ liệu công ty (tên client, brief, spec, code, event store, báo cáo nội bộ) ở lại account công ty.

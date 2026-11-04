@@ -89,7 +89,7 @@ def test_missing_root_key_retries_with_clear_root_message():
 
 def test_wrapped_output_not_unwrapped_and_retry_says_root_level():
     seen = []
-    res = _run(json.dumps(WRAPPED), json.dumps(WRAPPED), seen=seen)
+    res = _run(*[json.dumps(WRAPPED)] * (1 + runtime.schema_retries()), seen=seen)
     assert res["error"] == "SCHEMA_FAIL"                       # không tự bỏ bọc
     retry = seen[1]["messages"][-1]["content"]
     assert "CẤP GỐC" in retry and "['business_context']" in retry
@@ -103,7 +103,7 @@ def test_extra_root_key_reported():
 
 def test_schema_fail_reason_has_shape_not_raw_output():
     secret = "NOI-DUNG-THO-CUA-MODEL"
-    res = _run(f"{secret} " + json.dumps(NO_ROOT), f"{secret} " + json.dumps(NO_ROOT))
+    res = _run(*[f"{secret} " + json.dumps(NO_ROOT)] * (1 + runtime.schema_retries()))
     assert res["error"] == "SCHEMA_FAIL" and res["escalate"] is True
     assert "business_context" in res["reason"] and "mở đầu bằng chữ: True" in res["reason"]
     assert secret not in res["reason"] and "Nhà cung cấp FX" not in res["reason"]
@@ -126,7 +126,7 @@ def test_retry_count_from_config(monkeypatch):
 
 
 def test_schema_retries_config_default_and_validation(tmp_path):
-    assert runtime.schema_retries() == 1                        # giữ mặc định cũ max_retries=1
+    assert runtime.schema_retries() == 2                        # khớp card "retry ≤ 2" (duyệt 2026-11-04)
     (tmp_path / "config").mkdir()
     (tmp_path / "config/runtime.yaml").write_text("agent_runtime: {schema_retries: -1}\n")
     with pytest.raises(config.ConfigError):

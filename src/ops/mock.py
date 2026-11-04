@@ -12,7 +12,8 @@ from functools import lru_cache
 from src.agents import runtime
 
 AGENTS = ("a1_bu", "a2_estimation", "a3_proposal", "b1_ba", "b2_ux", "b3_ui", "b4_tech_lead",
-          "c1_dev", "c2_tester", "c3_qc", "d1_soc")
+          "c1_dev", "c2_tester", "c3_qc", "d1_soc", "e2_cos")
+SIDE = "side"                           # việc phụ (src/agents/side_task.py) — nhận bằng MODE_MARK
 TOKENS = {"in": 1200, "out": 600}       # usage giả mỗi lần gọi (để báo cáo có số)
 
 
@@ -23,6 +24,9 @@ def _prefixes() -> dict[str, str]:
 
 def identify(system: str) -> str:
     """Agent của system prompt (prefix dài nhất khớp); vai huddle → 'huddle:<role>'."""
+    from src.agents import side_task
+    if side_task.MODE_MARK in system:
+        return SIDE
     for role in ("PROPOSER", "CRITIC", "DECIDER"):
         if f"vai {role}" in system:
             return f"huddle:{role.lower()}"
@@ -92,6 +96,22 @@ def _out(agent: str, inp: dict) -> dict:
         return {"verdict": "pass", "issues": []}
     if agent == "d1_soc":
         return {"findings": inp.get("raw_findings") or [], "gate": "pass"}
+    if agent == "e2_cos":
+        req = str(inp.get("request") or "")
+        st = (inp.get("project_status") or {}).get("state")
+        return {"understanding": f"FACT (request): người hỏi “{req[:120]}”" + (f" · FACT (project_status): state {st}" if st else ""),
+                "clarifications": ["ASSUMPTION: cần hạn chót và người duyệt cụ thể?"],
+                "plan": ["RECOMMENDATION: tóm tình hình từ Team feed", "RECOMMENDATION: giao việc điều tra cho role phù hợp"],
+                "assignments": [{"agent": "b4_tech_lead", "task": "điều tra rủi ro kỹ thuật (mock)"}],
+                "decisions_needed": ["Người quyết: có giao việc phụ này không (gõ tên + XAC NHAN)"]}
+    if agent == SIDE:
+        task = inp.get("task") or {}
+        ctx = inp.get("context") or {}
+        st = (ctx.get("project_status") or {}).get("state")
+        return {"summary": f"Điều tra (mock): {str(task.get('title') or '')[:120]}",
+                "findings": [f"FACT (project_status): state {st}" if st else "ASSUMPTION: chưa có project_status"],
+                "risks": ["ASSUMPTION: phụ thuộc đối tác (mock)"],
+                "recommendations": ["RECOMMENDATION: người xem note rồi quyết bước tiếp"]}
     role = agent.split(":", 1)[1]
     if role == "proposer":
         return {"summary": "đề xuất (mock): phương án A / B", "options": ["A", "B"]}

@@ -122,7 +122,32 @@ font-size:12.5px;cursor:pointer;border-radius:6px}
 .lv{font-size:9.5px;font-weight:800;color:#5C6B7A;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-left:4px}
 .foot{font-size:10.5px;color:var(--muted);padding:6px 14px;border-top:1px solid var(--line);background:var(--panel)}
 #err{position:absolute;inset:auto 12px 44px 12px;background:#FBE7E4;color:#7A1E14;border-radius:8px;padding:8px 10px;font-size:12px;display:none;z-index:4}
+/* chế độ Tất cả dự án: chip dự án (! = ESCALATED, ⏳ = chờ gate) */
+.pchips{position:absolute;right:12px;bottom:30px;z-index:3;display:none;flex-direction:column;align-items:flex-end;gap:4px;max-width:250px;max-height:46%;overflow:auto}
+.pchips.show{display:flex}
+.pchip{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.94);border:1px solid var(--line);border-radius:8px;padding:4px 8px 4px 5px;
+font:700 11px/1.25 inherit;cursor:pointer;text-align:left;color:var(--ink)}
+.pchip:hover{border-color:var(--ink)}
+.pchip .pi{width:17px;height:17px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;background:#94A3B8;flex:none}
+.pchip.esc{border-color:#E8B4AC;background:#FDF1EF}.pchip.esc .pi{background:#C0392B;box-shadow:0 0 0 3px rgba(192,57,43,.22)}
+.pchip.gate .pi{background:#B5720E}.pchip.run .pi{background:#15803D}
+.pchip small{color:var(--muted);font-weight:600;margin-left:2px}
+.msg .pj{display:inline-block;font-size:9.5px;font-weight:800;color:#1F5BB0;background:#E3EEFB;border-radius:4px;padding:0 4px;margin-right:4px}
+.tgrp{font-size:11px;font-weight:800;color:var(--muted);padding:9px 4px 2px;letter-spacing:.02em;display:flex;gap:6px;align-items:center}
+.tgrp .esc{color:#A3281B}
+.c-queued{background:#FBF0DC;color:#8A560A}.c-started{background:#E3EEFB;color:#1F5BB0}.c-done{background:#E5F4EA;color:#15803D}.c-failed{background:#FBE7E4;color:#A3281B}
+.kd{font-size:9px;font-weight:800;border-radius:3px;padding:0 3px;margin-left:4px;background:#EEF1F4;color:#46525F}
+/* nhúng trong Control Room (?embed=1): phòng trên, Trao đổi dưới; Task/Agent nằm ở tab Control Room */
+body.embed{flex-direction:column}
+body.embed #stage{flex:none;width:100%;height:68vh}
+body.embed #panel{flex:1;height:auto;min-height:0;border-left:0;border-top:1px solid var(--line)}
+body.embed #secTask,body.embed #secAgent,body.embed .ttl a,body.embed .foot{display:none}
+body.embed #secLog{flex:1}
 @media(max-width:760px){
+  body.embed #stage{height:100vh;min-height:0}body.embed #panel{display:none}
+  .pchips{right:auto;left:8px;bottom:62px;flex-direction:row;flex-wrap:wrap;align-items:flex-start;max-width:calc(100% - 16px);max-height:30%}
+  .pchip{font-size:10px;padding:3px 6px 3px 4px}
+  body.embed .gatebar{display:none!important}body.embed .prow{display:none!important}
   body{flex-direction:column;height:auto;overflow:auto}
   #stage{flex:none;width:100%;height:64vh;min-height:360px}
   #panel{height:auto;border-left:0;border-top:1px solid var(--line)}
@@ -143,7 +168,7 @@ font-size:12.5px;cursor:pointer;border-radius:6px}
 <div id="stage">
   <div id="labels"></div>
   <div class="hud">
-    <div class="ttl"><b>Phòng 3D · team agent</b><span id="badge" class="badge demo">DEMO</span><a href="/">← Dashboard</a>
+    <div class="ttl"><b>Phòng 3D · team agent</b><span id="badge" class="badge demo">DEMO</span><a href="/">← Control Room</a>
       <div class="sub" id="modeTxt">Kịch bản mẫu chạy lặp</div>
       <div class="prow" id="prow"><span class="ldot" id="ldot" title="đang hoạt động"></span>
         <select id="proj" aria-label="Chọn project"></select><a class="rp" id="rpBtn" href="#" title="Xem lại từ đầu">⟲ Replay</a></div></div>
@@ -154,13 +179,14 @@ font-size:12.5px;cursor:pointer;border-radius:6px}
     </div>
   </div>
   <div class="gatebar" id="gatebar"></div>
+  <div class="pchips" id="pchips" aria-label="Dự án"></div>
   <div class="usage" id="usage" role="button" tabindex="0" aria-expanded="false" title="Token đã đốt — bấm xem top agent">
     <div class="u1"><span class="ut" id="uTot">0</span><span class="uu">token</span><span class="uarr">▲</span><span class="uc" id="uCost">$—</span></div>
     <div class="ubar" id="uBar"><i></i></div><div class="upct" id="uPct"></div>
     <div class="ulist" id="uList"></div>
   </div>
   <div class="legend" id="legend"></div>
-  <div class="hint">Kéo để xoay · cuộn để zoom · bấm nhân vật để lọc</div>
+  <div class="hint">Kéo để xoay · cuộn để zoom · bấm nhân vật để lọc · ! = ESCALATED (bấm mở Sự cố)</div>
   <div id="err"></div>
 </div>
 <div id="panel">
@@ -200,6 +226,8 @@ const FALLBACK_AGENTS = [
 function phaseOf(id){const p=id[0].toUpperCase();return PHASES[p]&&/\d/.test(id[1]||'')?p:'E'}
 const nameOf = id => SHORT[id] || (id||'—');
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const QS0 = new URLSearchParams(location.search), EMBED = QS0.get('embed')==='1', ALL = '__all';
+if (EMBED) document.body.classList.add('embed');
 const NARROW = matchMedia('(max-width:760px)').matches;
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -604,7 +632,7 @@ function relates(ev, id){ if (!id) return true; return ev.from===id || ev.to===i
 function msgHTML(ev){
   const to = ev.to ? ` → <b>${esc(nameOf(ALIAS[ev.to]||ev.to))}</b>` : '';
   return `<span class="ty" style="background:${TCOL[ev.type]||'#5C6B7A'}">${esc(ev.type)}</span><div style="min-width:0">
-    <div class="rt"><b>${esc(nameOf(ALIAS[ev.from]||ev.from))}</b>${to}${ev.task_id?` · ${esc(ev.task_id)}`:''}<span class="tm">${esc(evTime(ev))}</span></div>
+    <div class="rt">${ev.project?`<span class="pj">${esc(ev.project)}</span>`:''}<b>${esc(nameOf(ALIAS[ev.from]||ev.from))}</b>${to}${ev.task_id?` · ${esc(ev.task_id)}`:''}<span class="tm">${esc(evTime(ev))}</span></div>
     <div class="sm">${esc(ev.summary)}</div></div>`;
 }
 function addLog(ev, fresh){
@@ -629,16 +657,22 @@ function markLive(ev, ms){
 }
 function updCounts(){ document.getElementById('nLog').textContent = `(${logItems.length})`; }
 
-let STATE = {agents: FALLBACK_AGENTS.map(a=>({...a})), tasks: [], gate: null};
+let STATE = {agents: FALLBACK_AGENTS.map(a=>({...a})), tasks: [], gate: null, gates: [], projects: null, escalated: []};
+function taskHTML(t){ return `<div class="task" data-id="${esc(t.id)}">
+    <span class="id">${esc(t.id)}</span><span class="tt" title="${esc(t.title)}">${esc(t.title||'—')}${t.kind==='side'?'<span class="kd">phụ</span>':''}</span>
+    <span class="chip c-${esc(t.status)}" title="${esc(TASK_VI[t.status]||t.status)}">${esc(t.status)}</span>
+    <span class="meta">${t.owner_agent?`👤 ${esc(nameOf(t.owner_agent))}`:'chưa giao'}${t.deps&&t.deps.length?` · deps ${esc(t.deps.join(', '))}`:''}${t.owns&&t.owns.length?` · owns ${esc(t.owns.join(', '))}`:''}${t.risk_level?` · risk ${esc(t.risk_level)}`:''}${t.note?` · note: ${esc(t.note)}`:''}</span></div>`; }
 function renderTasks(){
   const ts = STATE.tasks.filter(t=>!filterId || t.owner_agent===filterId || (filterId==='c1_dev' && kids.has(t.id)));
   document.getElementById('nTask').textContent = `(${STATE.tasks.length})`;
   const cnt = {}; STATE.tasks.forEach(t=>cnt[t.status]=(cnt[t.status]||0)+1);
   document.getElementById('tcounts').innerHTML = TASK_ST.filter(s=>cnt[s]).map(s=>`<span class="chip c-${s}" title="${TASK_VI[s]}">${s} · ${cnt[s]}</span>`).join('');
-  document.getElementById('tasks').innerHTML = ts.length ? ts.map(t=>`<div class="task" data-id="${esc(t.id)}">
-    <span class="id">${esc(t.id)}</span><span class="tt" title="${esc(t.title)}">${esc(t.title||'—')}</span>
-    <span class="chip c-${esc(t.status)}" title="${esc(TASK_VI[t.status]||t.status)}">${esc(t.status)}</span>
-    <span class="meta">${t.owner_agent?`👤 ${esc(nameOf(t.owner_agent))}`:'chưa giao'}${t.deps&&t.deps.length?` · deps ${esc(t.deps.join(', '))}`:''}${t.owns&&t.owns.length?` · owns ${esc(t.owns.join(', '))}`:''}${t.risk_level?` · risk ${esc(t.risk_level)}`:''}</span></div>`).join('')
+  const grouped = ts.some(t=>t.project);
+  let html = '';
+  if (grouped){ const by = {}; ts.forEach(t=>(by[t.project]=by[t.project]||[]).push(t));
+    html = Object.keys(by).sort().map(pid=>`<div class="tgrp">${esc(pid)}${(STATE.escalated||[]).includes(pid)?'<span class="esc">! ESCALATED</span>':''}</div>`+by[pid].map(taskHTML).join('')).join(''); }
+  else html = ts.map(taskHTML).join('');
+  document.getElementById('tasks').innerHTML = ts.length ? html
     : `<div class="empty">${filterId?'Không có task của agent này.':'Chưa có task — B4 Tech Lead chưa chia backlog.'}</div>`;
 }
 function renderAgents(){
@@ -649,14 +683,19 @@ function renderAgents(){
     return `<div class="ag${filterId===a.id?' sel':''}" data-id="${esc(a.id)}"><span class="d" style="background:${PCOL[a.phase]||PCOL.E}"></span>
     <span class="nm">${esc(nameOf(a.id))}<small>${esc(a.phase)} · ${esc(PHASES[a.phase]||'')}</small>${a.level?`<span class="lv">${esc(a.level)}</span>`:''}</span>
     <span class="chip s-${esc(a.status)}">${esc(ST_VI[a.status]||a.status)}</span>
-    ${a.current_task||workers.length?`<span class="meta">${a.current_task?`task hiện tại: <b>${esc(a.current_task)}</b>`:''}${workers.length?`${a.current_task?' · ':''}worker: ${esc(workers.join(', '))}`:''}</span>`:''}</div>`;}).join('');
+    ${a.main||a.side ? ((a.main||[]).length||(a.side||[]).length ? `<span class="meta">${(a.main||[]).length?`chính: <b>${esc(a.main.join(', '))}</b>`:''}${(a.side||[]).length?`${(a.main||[]).length?' · ':''}phụ: <b>${esc(a.side.join(', '))}</b>`:''}</span>`:'')
+    : a.current_task||workers.length?`<span class="meta">${a.current_task?`task hiện tại: <b>${esc(a.current_task)}</b>`:''}${workers.length?`${a.current_task?' · ':''}worker: ${esc(workers.join(', '))}`:''}</span>`:''}</div>`;}).join('');
   el.querySelectorAll('.ag').forEach(r=>r.onclick=()=>focusAgent(r.dataset.id));
   for (const c of chars.values()) c.lbl.classList.toggle('sel', c.id===filterId);
 }
 function applyState(){
   for (const a of STATE.agents){ const c = chars.get(a.id); if (c) c.setStatus(a.status); }
   const gate = STATE.gate, gb = document.getElementById('gatebar');
-  gb.classList.toggle('show', !!gate); if (gate) gb.textContent = `⏳ ${gate.id} · chờ người duyệt${gate.who?` (${gate.who})`:''} — người ký trên Dashboard hoặc terminal của mình`;
+  const gates = STATE.gates||[];
+  gb.classList.toggle('show', !!gate || gates.length>0);
+  if (gate) gb.textContent = `⏳ ${gate.id} · chờ người duyệt${gate.who?` (${gate.who})`:''} — người ký trên Control Room hoặc terminal của mình`;
+  else if (gates.length) gb.textContent = `⏳ Chờ người ký: ${gates.map(g=>`${g.project} ${g.id}`).join(' · ')}`;
+  renderProjects();
   // worker theo trạng thái task: blocked → "!", xong (await_merge/ready/merged) → rời phòng
   const byId = Object.fromEntries(STATE.tasks.map(t=>[t.id,t]));
   for (const [tid,k] of kids){ const t = byId[tid]; if (!t) continue;
@@ -687,7 +726,25 @@ function flyTo(target, dist){
   if (RM){ controls.target.copy(target); camera.position.copy(to); return; }
   fly = {t:0, ft:controls.target.clone(), fp:camera.position.clone(), tt:target.clone(), tp:to};
 }
+function openIncident(pid){            // dự án ESCALATED → tab Sự cố của Control Room
+  if (EMBED) parent.postMessage({type:'room:incident', project:pid}, location.origin);
+  else location.href = '/?'+new URLSearchParams({tab:'incident', project:pid});
+}
+function renderProjects(){
+  const el = document.getElementById('pchips'), ps = STATE.projects;
+  el.classList.toggle('show', !!(ps && ps.length));
+  if (!ps) { el.innerHTML=''; return; }
+  el.innerHTML = ps.map(p=>{ const cls = p.escalated?'esc':p.gate?'gate':(p.working&&p.working.length)?'run':'';
+    const ic = p.escalated?'!':p.gate?'⏳':(p.working&&p.working.length)?'▶':'·';
+    return `<button class="pchip ${cls}" data-p="${esc(p.id)}" title="${p.escalated?'ESCALATED — bấm mở tab Sự cố':esc(p.state||'')}"><span class="pi">${ic}</span>${esc(p.id)}<small>${esc(p.state||'')}${p.side_open?` · ${p.side_open} việc phụ`:''}</small></button>`; }).join('');
+  el.querySelectorAll('.pchip').forEach(b=>b.onclick=()=>{ const p = ps.find(x=>x.id===b.dataset.p);
+    if (p && p.escalated) openIncident(p.id);
+    else if (EMBED) parent.postMessage({type:'room:project', project:b.dataset.p}, location.origin); });
+}
 function focusAgent(id){
+  const ag = STATE.agents.find(x=>x.id===id);
+  const escP = ag && (ag.work||[]).map(w=>w.project).find(p=>(STATE.escalated||[]).includes(p));
+  if (escP && filterId!==id) openIncident(escP);
   const c = chars.get(id) || [...kids.values()].find(k=>k.agent===id);
   if (filterId===id){ setFilter(null); flyTo(VIEW_TARGET, defaultDist()); return; }
   setFilter(id);
@@ -842,6 +899,7 @@ function setUsage(u){
   const top = Object.entries(u.by_agent||{}).sort((a,b)=>b[1]-a[1]), mx = top.length ? top[0][1] : 1;
   document.getElementById('uList').innerHTML = (top.length ? top.map(([id,n])=>`<div class="ur"><b>${esc(agentLabel(id))}</b><span>${fmtTok(n)}</span><i style="width:${(n/mx*100).toFixed(0)}%"></i></div>`).join('')
     : '<div class="usub">Chưa có lần gọi model.</div>')
+    + (u.by_project ? `<div class="usub"><b>Theo dự án:</b> ${Object.entries(u.by_project).map(([p,v])=>`${esc(p)} ${fmtTok(v.total)}`).join(' · ')||'—'}</div>` : '')
     + `<div class="usub">${Object.entries(u.by_tier||{}).map(([t,v])=>`${esc(t)} ${fmtTok(v.total)}`).join(' · ')}${u.calls?` · ${u.calls} lần gọi`:''}</div>`;
   if (prev!=null && u.total>prev){ usageEl.classList.remove('up'); void usageEl.offsetWidth; usageEl.classList.add('up');
     clearTimeout(setUsage._t); setUsage._t = setTimeout(()=>usageEl.classList.remove('up'), 1200); }
@@ -873,12 +931,12 @@ async function getJSON(url, timeoutMs=4000){
   try { const r = await fetch(url, {cache:'no-store', signal:ctl.signal}); if (!r.ok) throw new Error('HTTP '+r.status); return await r.json(); }
   finally { clearTimeout(to); }
 }
-const roomURL = () => PROJECT ? `/api/room?limit=200&project=${encodeURIComponent(PROJECT)}` : '/api/room?limit=200';
+const roomURL = () => PROJECT===ALL ? '/api/room/all?limit=200' : PROJECT ? `/api/room?limit=200&project=${encodeURIComponent(PROJECT)}` : '/api/room?limit=200';
 const fetchRoom = (ms) => getJSON(roomURL(), ms);
 function showErr(t){ const el=document.getElementById('err'); el.textContent=t; el.style.display='block'; }
 function hideErr(){ document.getElementById('err').style.display='none'; }
 function applySnapshot(snap, first){
-  STATE = {agents: snap.agents||[], tasks: snap.tasks||[], gate: snap.gate};
+  STATE = {agents: snap.agents||[], tasks: snap.tasks||[], gate: snap.gate, gates: snap.gates||[], projects: snap.projects||null, escalated: snap.escalated||[]};
   makeAgents(STATE.agents);
   for (const e of snap.events||[]){
     if (seen.has(e.id)) continue; seen.add(e.id);
@@ -894,7 +952,7 @@ function applySnapshot(snap, first){
 }
 function applyFrame(f){
   window.__roomLat.push(Date.now()/1000 - f.ts);
-  applySnapshot({agents:f.agents, tasks:f.tasks, gate:f.gate, events:f.events, usage:f.usage}, false);
+  applySnapshot({agents:f.agents, tasks:f.tasks, gate:f.gate, gates:f.gates, projects:f.projects, escalated:f.escalated, events:f.events, usage:f.usage}, false);
 }
 function startQueue(){
   if (queueRunning) return; queueRunning = true;
@@ -919,7 +977,7 @@ function runStream(first){              // project trong event store: SSE, fallb
       catch(e){ showErr('Mất kết nối server — đang thử lại…'); } }, 2000); };
   const connect = ()=>{
     retryT = null;
-    es = new EventSource(`/api/room/stream?project=${encodeURIComponent(PROJECT)}&since=${lastSeq}`);
+    es = new EventSource(PROJECT===ALL ? `/api/room/all/stream?since=${lastSeq}` : `/api/room/stream?project=${encodeURIComponent(PROJECT)}&since=${lastSeq}`);
     es.addEventListener('room', m=>{ const f = JSON.parse(m.data); applyFrame(f); lastSeq = Math.max(lastSeq, f.seq); stopPoll(); hideErr(); });
     es.onopen = ()=>{ stopPoll(); hideErr(); };
     es.onerror = ()=>{ showErr('SSE gián đoạn — tạm poll /api/room, đang nối lại…'); startPoll();
@@ -960,14 +1018,15 @@ function setBadge(kind, txt){ const b = document.getElementById('badge'); b.text
 function projectPicker(list, current){
   const sel = document.getElementById('proj'), row = document.getElementById('prow');
   const opt = (v, t) => `<option value="${esc(v)}"${v===(current||'')?' selected':''}>${esc(t)}</option>`;
-  sel.innerHTML = opt('', 'Dashboard (DASH)') + list.map(p=>opt(p.id, `${p.active?'● ':'○ '}${p.id}${p.phase_name?' · '+p.phase_name:''}`)).join('') + opt('__demo', 'Demo (kịch bản mẫu)');
+  sel.innerHTML = opt(ALL, `Tất cả dự án (${list.length})`) + opt('', 'Dashboard (DASH)') + list.map(p=>opt(p.id, `${p.active?'● ':'○ '}${p.id}${p.phase_name?' · '+p.phase_name:''}`)).join('') + opt('__demo', 'Demo (kịch bản mẫu)');
   row.classList.add('show');
   const cur = list.find(p=>p.id===current);
-  document.getElementById('ldot').classList.toggle('on', !!(cur && cur.active));
+  document.getElementById('ldot').classList.toggle('on', current===ALL ? list.some(p=>p.active) : !!(cur && cur.active));
   const rp = document.getElementById('rpBtn'); rp.style.display = cur ? '' : 'none';
   if (cur){ const q = new URLSearchParams({project:cur.id}); if (MODE!=='replay') q.set('replay','1');
     rp.href = '?'+q; rp.textContent = MODE==='replay' ? (cur.active?'● Live':'⟲ Replay lại') : '⟲ Replay'; }
-  sel.onchange = ()=>{ const v = sel.value; location.search = v==='__demo' ? '?demo=1' : v ? '?'+new URLSearchParams({project:v}) : '?dash=1'; };
+  sel.onchange = ()=>{ const v = sel.value, q = new URLSearchParams(v==='__demo' ? {demo:'1'} : v===ALL ? {all:'1'} : v ? {project:v} : {dash:'1'});
+    if (EMBED) q.set('embed','1'); location.search = '?'+q; };
 }
 (async()=>{
   const q = new URLSearchParams(location.search), force = q.has('demo') && q.get('demo')!=='0';
@@ -977,14 +1036,14 @@ function projectPicker(list, current){
     const list = plist.projects || [];
     PROJECT = q.get('project') || null;
     if (PROJECT && !list.some(p=>p.id===PROJECT)) { showErr(`Không có project ${PROJECT} trong event store — hiện board Dashboard.`); PROJECT = null; }
-    if (!PROJECT && !q.has('project') && !q.has('dash')){ const a = list.find(p=>p.active); if (a) PROJECT = a.id; }
+    if (!PROJECT && !q.has('dash') && (q.get('all')==='1' || !q.has('project'))) PROJECT = ALL;   // mặc định: Tất cả dự án
     const cur = list.find(p=>p.id===PROJECT);
     if (cur && (q.get('replay')==='1' || !cur.active)){
       setBadge('replay', `Replay từ event store · ${PROJECT}`); projectPicker(list, PROJECT); runReplay(); return;
     }
     let snap = null; try { snap = await fetchRoom(3000); } catch(e){ snap = null; }
     if (snap && Array.isArray(snap.agents)){
-      setBadge('live', PROJECT ? `Event store · ${PROJECT} · SSE realtime` : 'Board Dashboard (DASH) · cập nhật mỗi 2s');
+      setBadge('live', PROJECT===ALL ? `Tất cả dự án (${list.length}) · SSE realtime` : PROJECT ? `Event store · ${PROJECT} · SSE realtime` : 'Board Dashboard (DASH) · cập nhật mỗi 2s');
       projectPicker(list, PROJECT);
       if (PROJECT) runStream(snap); else runLive(snap);
       setInterval(async()=>{ try { const pl = await getJSON('/api/projects', 4000); projectPicker(pl.projects||[], PROJECT); } catch(e){} }, 10000);

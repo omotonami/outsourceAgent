@@ -117,7 +117,8 @@ class Scheduler:
             handle.board = WorkerBoard(self.board, self.worker_agents,
                                        cancelled=lambda h=handle: h.cancelled.is_set(), lock=self._lock)
             self._set_status(t["id"], "in_dev")
-            self._event("ASSIGN", t["id"], agent=agent, task_type=task_type, trigger=trigger)
+            self._event("ASSIGN", t["id"], agent=agent, task_type=task_type, trigger=trigger,
+                        project=getattr(self.board, "project_id", None), kind="main")
             self._event("SPAWN", t["id"], trigger=trigger, owns=owns,
                         attempt=contract["input_slice"]["attempt"], budget=contract["budget"])
             fut = self._spawn(contract, handle, alloc)

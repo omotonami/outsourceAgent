@@ -313,7 +313,7 @@ def client(monkeypatch, db, ax, fb):
     monkeypatch.setattr(srv, "GATE_STORE", EventStore(db))
     monkeypatch.setattr(srv, "GATE_FEEDBACK_LOG", fb)
     monkeypatch.setattr(srv, "AUTONOMY", ax)
-    return tc.TestClient(srv.app)
+    return tc.TestClient(srv.app, base_url="http://localhost")   # ghi chỉ từ Host cục bộ (app.write_refusal)
 
 
 def _post(client, pid, g, d, **body):
@@ -344,7 +344,8 @@ def test_api_typed_confirm_required(client, db, pid):
     for body in ({"signer": "Lan"}, {"signer": "Lan", "typed_confirm": "xac nhan"},
                  {"signer": "Lan", "typed_confirm": "XAC NHAN "}, {"typed_confirm": "XAC NHAN"}):
         assert _post(client, pid, "G1", "approve", **body).status_code == 400
-    assert client.post(f"/api/projects/{pid}/gate/G1/approve", content=b"not json").status_code == 400
+    assert client.post(f"/api/projects/{pid}/gate/G1/approve", content=b"not json",
+                       headers={"Content-Type": "application/json"}).status_code == 400
     assert EventStore(db).last_seq(pid) == n
 
 

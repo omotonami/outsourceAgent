@@ -265,7 +265,7 @@ def client(monkeypatch, db):
     from src.server import app as srv
     monkeypatch.setattr(srv, "EVENTSTORE", EventStore(db, readonly=True))
     monkeypatch.setattr(srv, "GATE_STORE", EventStore(db))
-    return tc.TestClient(srv.app)
+    return tc.TestClient(srv.app, base_url="http://localhost")   # ghi chỉ từ Host cục bộ (app.write_refusal)
 
 
 def _post(client, pid, action, **body):
@@ -302,7 +302,8 @@ def test_api_typed_confirm_and_bad_action(client, db, pid):
     assert _post(client, pid, "nuke", signer="Lan", typed_confirm="XAC NHAN").status_code == 400
     assert _post(client, pid, "retry", signer="Lan", typed_confirm="XAC NHAN",
                  packet_hash="sha256:khac").status_code == 409
-    assert client.post(f"/api/projects/{pid}/escalation/retry", content=b"x").status_code == 400
+    assert client.post(f"/api/projects/{pid}/escalation/retry", content=b"x",
+                       headers={"Content-Type": "application/json"}).status_code == 400
     assert EventStore(db).last_seq(pid) == n
 
 

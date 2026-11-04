@@ -7,6 +7,7 @@ import copy
 import logging
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -16,6 +17,7 @@ from jsonschema import ValidationError
 from src.agents import e1_pm
 from src.blackboard import eventstore
 from src.blackboard.store import Blackboard, PermissionDenied
+from src.common import config
 from src.common.config import ConfigError
 from src.governance import confirm
 from src.iso import conformance, impact, inventory
@@ -29,11 +31,59 @@ HERE = Path(__file__).parent
 log = logging.getLogger(__name__)
 app = FastAPI(title="Outsourcing Agents Dashboard")
 app.mount("/static", StaticFiles(directory=HERE/"static"), name="static")
+
+
+@app.middleware("http")
+async def _guard_writes(request: Request, call_next):
+    """Mọi POST/PUT/PATCH/DELETE: kiểm Content-Type JSON + Host/Origin cục bộ (write_refusal) trước handler."""
+    bad = write_refusal(request.method, request.headers)
+    if bad:
+        return JSONResponse({"error": bad[1]}, bad[0])
+    return await call_next(request)
 ZW = demo.ZONE_WRITER                 # tên cũ
 AGENT_IDS = demo.AGENT_IDS
 FEED_LIMIT_MAX = 500                  # trần số event /api/feed trả về
 REVIEW_LOG_ERRORS = (OSError, ValueError, ConfigError)   # lỗi ghi review autonomy được bắt sau khi ký
 REVIEW_RISK_SEVERITY = "Medium"
+WRITE_METHODS = ("POST", "PUT", "PATCH", "DELETE")
+
+
+# ----- chặn ghi chéo nguồn (CSRF / DNS rebinding) cho MỌI request ghi -----
+def allowed_hosts() -> set[str]:
+    """Host/Origin được phép ghi: localhost, 127.0.0.1, ::1 + dashboard.allowed_hosts (config/runtime.yaml)."""
+    extra = (config.load_yaml("config/runtime.yaml").get("dashboard") or {}).get("allowed_hosts") or []
+    return {"localhost", "127.0.0.1", "::1"} | {str(h).strip().lower() for h in extra}
+
+
+def _hostname(netloc: str) -> str | None:
+    try:
+        return urlsplit("//" + netloc).hostname
+    except ValueError:
+        return None
+
+
+def write_refusal(method: str, headers) -> tuple[int, str] | None:
+    """(mã, lý do) nếu request ghi bị từ chối, None nếu cho qua.
+    - Content-Type phải là application/json (form/text từ trang lạ không gửi được mà không preflight) → 415.
+    - Host phải thuộc allowed_hosts() (chống DNS rebinding) → 403.
+    - Origin (nếu có) phải http(s) với hostname thuộc allowed_hosts(); "null"/lạ → 403. Thiếu Origin (curl,
+      script cục bộ) chỉ qua khi Host hợp lệ."""
+    if method.upper() not in WRITE_METHODS:
+        return None
+    ok = allowed_hosts()
+    host = _hostname(headers.get("host") or "")
+    if not host or host.lower() not in ok:
+        return 403, "Host không được phép ghi (chỉ localhost/127.0.0.1 hoặc dashboard.allowed_hosts)"
+    origin = headers.get("origin")
+    if origin is not None:
+        u = urlsplit(origin) if origin.strip().lower() != "null" else None
+        oh = u.hostname if u and u.scheme in ("http", "https") else None
+        if not oh or oh.lower() not in ok:
+            return 403, "Origin không được phép ghi"
+    ctype = (headers.get("content-type") or "").split(";", 1)[0].strip().lower()
+    if ctype != "application/json":
+        return 415, "Content-Type phải là application/json"
+    return None
 
 
 # ----- state phiên (1 dự án demo) -----

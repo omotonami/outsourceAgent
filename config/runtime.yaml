@@ -14,3 +14,7 @@ agent_runtime:
   schema_retries: 1        # giữ mặc định cũ (max_retries=1); chủ repo đổi số ở đây
   extract_max_chars: 400000       # output model dài hơn → coi là lỗi parse (retry), không quét
   extract_max_candidates: 64      # số span {…} tối đa thử decode khi tìm object JSON trong output
+# Dashboard (src/server/app.py): MỌI request ghi (POST/PUT/PATCH/DELETE) phải Content-Type application/json, Host
+# (và Origin nếu có) là localhost / 127.0.0.1 / ::1 hoặc tên trong allowed_hosts — sai → 403 (Content-Type → 415).
+dashboard:
+  allowed_hosts: []        # vd [dash.noibo.local] khi chạy sau reverse proxy nội bộ

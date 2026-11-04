@@ -1,16 +1,18 @@
 """Nạp skill 3 lớp. _core = specs/02_agents/<role>.md ; team/personal = knowledge/<role>/."""
 from pathlib import Path
-import re, yaml
 
-ROOT = Path(__file__).parents[2]
+from src.common import config
+
+ROOT = config.ROOT
 SPECS = ROOT / "specs/02_agents"
 KN = ROOT / "knowledge"
 
 
 def _parse(path: Path) -> dict:
     text = path.read_text(encoding="utf-8")
-    m = re.match(r"\s*---\n(.*?)\n---\n(.*)", text, re.S)
-    meta, body = (yaml.safe_load(m.group(1)), m.group(2).strip()) if m else ({}, text)
+    meta, body = config.split_front_matter(text)
+    if body is not text:                          # có frontmatter → bỏ khoảng trắng đầu/cuối body
+        body = body.strip()
     return {**meta, "layer": meta.get("layer", "team"), "body": body, "path": str(path)}
 
 

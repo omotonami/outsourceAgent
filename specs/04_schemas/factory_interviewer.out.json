@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "factory_interviewer output",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "job": {
+      "type": "string"
+    },
+    "done_when": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "anti_jobs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "forbidden": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "input": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "untrusted_inputs": {
+      "type": "string"
+    },
+    "output": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "zone": {
+      "type": "string"
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "phase": {
+      "type": "string"
+    },
+    "trigger": {
+      "type": "string"
+    },
+    "risk_level": {
+      "type": "string"
+    },
+    "model_tier": {
+      "type": "string"
+    },
+    "reflection": {
+      "type": "object",
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "id",
+    "job",
+    "done_when",
+    "anti_jobs",
+    "input",
+    "output",
+    "phase",
+    "risk_level",
+    "model_tier"
+  ],
+  "additionalProperties": false
+}

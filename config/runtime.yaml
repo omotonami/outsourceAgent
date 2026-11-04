@@ -1,0 +1,14 @@
+# Event store dùng chung (src/blackboard/eventstore.py) — SQLite append-only cho Phòng 3D realtime.
+# Agent/Dispatcher ở process khác ghi xuyên Blackboard → store; server dashboard CHỈ ĐỌC.
+# Biến môi trường OA_EVENTSTORE_PATH (nếu có) thay `path` (vd chạy thử / test).
+eventstore:
+  path: data/runtime/events.sqlite3   # tương đối so với gốc repo; data/runtime/ đã gitignore
+  write_through: false     # true: Blackboard(project_id) không truyền store → tự ghi xuyên store trên
+  busy_timeout_ms: 5000    # SQLite chờ khoá khi nhiều process ghi đồng thời
+  poll_ms: 300             # SSE /api/room/stream đọc store mỗi poll_ms
+  heartbeat_s: 15          # SSE gửi comment giữ kết nối
+  live_window_s: 30        # project có ghi trong N giây gần nhất → "live" trên /api/projects
+# Runtime agent (src/agents/runtime.py). Output model sai JSON/schema → gọi lại tối đa schema_retries lần
+# (tổng lượt = 1 + schema_retries) với thông báo lỗi khoá gốc rõ ràng; vẫn sai → SCHEMA_FAIL → ESCALATED.
+agent_runtime:
+  schema_retries: 1        # giữ mặc định cũ (max_retries=1); chủ repo đổi số ở đây

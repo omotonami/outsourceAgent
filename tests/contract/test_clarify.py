@@ -25,3 +25,20 @@ def test_clarify_suggest_recommendation():
     out = clarify.suggest(b, {"project_id":"p"}, sender=fake)
     assert out and out[0]["label"]=="RECOMMENDATION" and out[0]["confirmed"] is False
     assert "Wise" in out[0]["answer"]
+
+
+# Review cuối #1: resolve() không còn fallback ghi thẳng board._data; danh tính cố định "clarify"
+def test_clarify_resolve_rejects_foreign_agent_and_no_fallback():
+    import pytest
+    from src.blackboard.store import PermissionDenied
+    from src.blackboard.proxy import ReadOnlyBoard
+    b = Blackboard("p")
+    with pytest.raises(PermissionDenied):
+        clarify.resolve(b, "q-x", {"anything": ["not", "a", "string"]}, agent="c1_dev")
+    assert b.get("clarify_answers") is None
+    # qua proxy chỉ đọc: lỗi nổi lên, không có đường vòng
+    with pytest.raises(PermissionDenied):
+        clarify.resolve(ReadOnlyBoard(b), "q", "a")
+    assert b.get("clarify_answers") is None
+    clarify.resolve(b, "q", "a", agent="clarify")      # tương thích tham số cũ
+    assert b.get("clarify_answers") == [{"q": "q", "answer": "a"}]

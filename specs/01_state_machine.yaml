@@ -1,5 +1,5 @@
 # Mỗi transition có guard kiểm tra bằng Code (tên hàm trong gates.py).
-states: [INTAKE, PRESALES, AWAIT_G1, DISCOVERY, AWAIT_G2, BUILD, AWAIT_G3, SECURITY, AWAIT_G4, RELEASED, ESCALATED]
+states: [INTAKE, PRESALES, AWAIT_G1, DISCOVERY, AWAIT_G2, BUILD, AWAIT_G3, SECURITY, AWAIT_G4, RELEASED, ESCALATED, ABANDONED]  # ABANDONED: người đóng dự án sau ESCALATED (src/ops/escalation.py), không có transition ra
 transitions:
   - {from: INTAKE,    to: PRESALES,  guard: lead_brief_valid}
   - {from: PRESALES,  to: AWAIT_G1,  guard: presales_ready}

@@ -1,7 +1,7 @@
 """Distiller: đọc revision_log qua NHIỀU task, đếm pattern user sửa lặp lại,
 cô đọng thành skill 'learned' trạng thái PROPOSED. KHÔNG tự vào prompt —
 phải qua eval regression + người duyệt mới promote lên team (đúng meta-rule v5)."""
-import json, re, datetime
+import re, datetime
 from pathlib import Path
 from collections import Counter
 

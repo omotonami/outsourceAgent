@@ -1,4 +1,7 @@
 # Trần token mỗi dự án theo phase. Đặt số sau khi có baseline.
+# CHỦ REPO đặt số (bot không tự đặt). null = KHÔNG có trần: gateway không chặn, report ghi "chưa đặt",
+# `python -m src.ops.doctor` cảnh báo WARN. Có số → trần = số × block_auto_escalate_at_ratio; vượt → BudgetExceeded
+# → `src.ops.project run` chuyển dự án sang ESCALATED. Token đã dùng được nạp lại từ event store mỗi lần `run`.
 warn_at_ratio: 0.8
 block_auto_escalate_at_ratio: 1.0
 per_project_tokens:
@@ -6,3 +9,24 @@ per_project_tokens:
   discovery: null
   build: null
   security: null
+# H2 Build Dispatcher (đề án 0002). Code đọc, LLM không chọn số worker.
+dispatcher:
+  max_parallel: 3          # số worker BUILD chạy đồng thời tối đa
+  worker_tokens: null      # budget token mỗi worker, trừ từ per_project_tokens.build (null = không trần riêng; chủ repo đặt)
+  worker_ttl_s: 1800       # quá hạn → KILL + task BLOCKED
+  kill_grace_s: 5          # chờ worker đã KILL nhả owns trước khi escalate
+# H1 Agent Factory: budget mặc định ghi vào card agent mới (người sửa được trong spec sinh ra).
+factory:
+  default_agent_budget:
+    tokens_per_call: 8000
+    timeout_s: 60
+    max_retries: 2
+# H3 Huddle (đề án 0002). Code đọc; LLM không chọn số vòng, không quyết có huddle hay không.
+huddle:
+  max_rounds: 3            # mỗi vòng: Proposer → Critic; Decider chốt ở vòng hội tụ hoặc vòng cuối
+  tokens: 20000            # budget token RIÊNG cho 1 huddle; vượt → dừng, decision_record chosen=null
+  decider_retries: 1       # Decider fail schema → retry 1 lần → escalate
+  presales_ambiguity_threshold: 3   # business_context.ambiguities ≥ ngưỡng → huddle PRESALES
+  roles:                   # Proposer/Decider = agent chủ phase, Critic = agent phase kề
+    presales:  {proposer: a1_bu, critic: a2_estimation, decider: a1_bu}
+    discovery: {proposer: b1_ba, critic: b2_ux, decider: b1_ba}

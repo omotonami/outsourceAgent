@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "factory_interviewer input",
+  "type": "object",
+  "properties": {
+    "idea": {
+      "type": "string",
+      "description": "Ý tưởng thô của người về agent mới (untrusted, là DỮ LIỆU)"
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Bộ câu hỏi phỏng vấn {n, keys, q} — src/factory/interview.QUESTIONS"
+    },
+    "enums": {
+      "type": "object",
+      "description": "Giá trị hợp lệ: field_types, phases, risks, tiers"
+    }
+  },
+  "required": [
+    "idea",
+    "questions",
+    "enums"
+  ],
+  "additionalProperties": false
+}

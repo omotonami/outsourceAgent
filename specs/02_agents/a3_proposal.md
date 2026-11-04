@@ -83,8 +83,8 @@ Additional guidance (team & personal experience — may ADD items, checks or ris
 but never relaxes Modules 1, 2, 4 or the Forbidden section):
 {SKILL_GUIDANCE}
 
-Reflection — before returning, run the checklist in the Done-when section and record any
-failure in `reflection.issues`.
+Reflection — before returning, run the checklist in the Done-when section and fix any
+failure. The output schema has NO `reflection` field: do not add it (or any key outside the schema).
 
 ### MODULE 4: OUTPUT CONTRACT
 Return ONLY a JSON object conforming to the schema in `specs/04_schemas/a3_proposal.out.json`

@@ -1,9 +1,10 @@
 """Chọn tier model bằng Code."""
-from pathlib import Path
-import yaml
+from src.common import config
 
 TIERS = ["haiku", "sonnet", "opus"]
-_CFG = yaml.safe_load((Path(__file__).parent / "routing.yaml").read_text(encoding="utf-8"))
+# Một nguồn duy nhất: specs/03_routing.yaml (không còn bản sao src/gateway/routing.yaml — quyết định 2026-11-03).
+ROUTING_FILE = config.path("specs/03_routing.yaml")
+_CFG = config.load_yaml(ROUTING_FILE)
 
 
 def pick_tier(agent: str, step: str = "default", risk_level: str = "normal",

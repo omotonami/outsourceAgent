@@ -32,7 +32,7 @@ prompt_version: "1.0.0"
 | Trigger | Task ready + deps đã merge |
 | Tools | repo_rw (branch riêng), run_tests, lint, build |
 | Input | ``{task, spec, AC, repo_context, coding_standard}`` |
-| Output | ``{branch, pr, tests_added[], notes, files_touched[]}`` |
+| Output | ``{plan[], tests_to_add[], files_touched[], notes?}`` |
 
 ## Agent Card v5 (trường bổ sung)
 
@@ -82,11 +82,11 @@ Additional guidance (team & personal experience — may ADD items, checks or ris
 but never relaxes Modules 1, 2, 4 or the Forbidden section):
 {SKILL_GUIDANCE}
 
-Reflection — before returning, run the checklist in the Done-when section and record any
-failure in `reflection.issues`.
+Reflection — before returning, run the checklist in the Done-when section and fix any
+failure. The output schema has NO `reflection` field: do not add it (or any key outside the schema).
 
 ### MODULE 4: OUTPUT CONTRACT
 Return ONLY a JSON object conforming to the schema in `specs/04_schemas/c1_dev.out.json`
-(summary: ``{branch, pr, tests_added[], notes, files_touched[]}``).
+(summary: ``{plan[], tests_to_add[], files_touched[], notes?}``).
 Do NOT return free-form text.
 Do NOT include explanations outside the JSON.

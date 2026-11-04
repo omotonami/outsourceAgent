@@ -15,8 +15,17 @@
 6. Con số (effort, rate) nằm trong `data/`, không hard-code trong code hay skill.
 7. Output agent gắn nhãn FACT / ASSUMPTION / RECOMMENDATION; FACT phải có nguồn.
 8. Mỗi tính năng mới kèm test trong `tests/`. Chạy `pytest -q` trước khi báo xong.
+9. Mọi thay đổi (code, specs, config, docs) phải được ghi vào `docs/history/` (file của đợt + dòng mục lục) trong cùng commit/PR trước khi báo xong. Kiểm: `python -m src.tools.checks.history_check --base <ref>`.
+10. Bot/agent KHÔNG được tự điền danh tính người vào `confirmed_by` / `approved_by` / `reviewer`. Xác nhận người chỉ qua `gate_ui` hoặc terminal tương tác do chính người gõ.
 
 ## Mỗi agent
 - Đặc tả (card + prompt 4 module + I/O schema): `specs/02_agents/<id>.md`
 - Code runner (1 file): `src/agents/<id>.py`
 - Schema I/O: `specs/04_schemas/<id>.in.json` / `.out.json`
+
+## Vận hành hằng ngày (Chief)
+- Bắt đầu: `START_HERE.md`. Lịch một ngày + xử lý sự cố: `docs/ops/runbook-daily.md`.
+- Skills: `.claude/skills/` — `chief-daily` (tổng), `flow-new-project`, `flow-daily-report`, `flow-room`, `flow-new-bot`.
+- CLI: `python -m src.ops.project|report|prune|doctor`. Gate G1–G4 chỉ NGƯỜI ký (luật 10), 2 đường: dashboard tab
+  "Gate dự án" hoặc người tự gõ `python -m src.ops.gate sign|reject` (bắt TTY). Claude KHÔNG chạy lệnh/API ký.
+- Dữ liệu công ty ở lại account công ty; ra ngoài chỉ bản `report daily --redact`.

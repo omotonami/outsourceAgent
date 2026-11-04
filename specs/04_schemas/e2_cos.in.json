@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "e2_cos input",
+  "type": "object",
+  "properties": {
+    "request": {
+      "type": "string",
+      "description": "Yêu cầu của người (untrusted)"
+    },
+    "project_status": {
+      "type": "object",
+      "description": "zone project_status (chỉ đọc)"
+    },
+    "risk_register": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "risk còn mở (chỉ đọc)"
+    },
+    "decision_records": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "kết quả huddle (chỉ đọc)"
+    },
+    "trace_summary": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Team feed rút gọn từ trace_log (chỉ summary)"
+    }
+  },
+  "required": [
+    "request"
+  ],
+  "additionalProperties": false
+}

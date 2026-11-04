@@ -17,6 +17,8 @@ Mở http://localhost:8000
 - **Token & chi phí**: tích luỹ theo tier (giá minh hoạ).
 - Ô **Task build high-risk**: đổi routing Dev/QC giữa Opus và Sonnet để thấy logic.
 
+Code: `src/server/app.py` (route + phiên), `src/server/demo.py` (kịch bản bước, payload mẫu, giá minh hoạ).
+
 ## Mock vs thật
 Mặc định mock (không tốn token). Gọi model thật: sửa `src/server/app.py` để gọi `src/agents/*` 
 với `ANTHROPIC_API_KEY`, thay số token mô phỏng bằng `usage` thật từ `eval/runs/trace.jsonl`.

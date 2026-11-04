@@ -1,0 +1,7 @@
+# Đơn giá ƯỚC TÍNH (USD / 1 triệu token) theo tier — chỉ để hiển thị chi phí (dashboard, Phòng 3D).
+# Không dùng để tính tiền thật. Sửa số ở đây, không hard-code trong code (luật 6).
+currency: USD
+per_million_tokens:
+  haiku:  {in: 1.0,  out: 5.0}
+  sonnet: {in: 3.0,  out: 15.0}
+  opus:   {in: 15.0, out: 75.0}

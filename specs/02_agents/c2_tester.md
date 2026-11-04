@@ -32,7 +32,7 @@ prompt_version: "1.0.0"
 | Trigger | PR mở |
 | Tools | test_runner, coverage, e2e_runner |
 | Input | ``{pr, AC[], test_plan}`` |
-| Output | ``{test_cases[{ac_ref, steps, expected}], results[], coverage_delta, failures[]}`` |
+| Output | ``{test_cases[{ac_ref, kind?: unit/e2e, steps[], expected}]}`` |
 
 ## Agent Card v5 (trường bổ sung)
 
@@ -80,11 +80,11 @@ Additional guidance (team & personal experience — may ADD items, checks or ris
 but never relaxes Modules 1, 2, 4 or the Forbidden section):
 {SKILL_GUIDANCE}
 
-Reflection — before returning, run the checklist in the Done-when section and record any
-failure in `reflection.issues`.
+Reflection — before returning, run the checklist in the Done-when section and fix any
+failure. The output schema has NO `reflection` field: do not add it (or any key outside the schema).
 
 ### MODULE 4: OUTPUT CONTRACT
 Return ONLY a JSON object conforming to the schema in `specs/04_schemas/c2_tester.out.json`
-(summary: ``{test_cases[{ac_ref, steps, expected}], results[], coverage_delta, failures[]}``).
+(summary: ``{test_cases[{ac_ref, kind?: unit/e2e, steps[], expected}]}``).
 Do NOT return free-form text.
 Do NOT include explanations outside the JSON.

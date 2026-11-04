@@ -2,23 +2,28 @@
 Khi người duyệt sửa/bác một mục ở G1..G4: (a) ghi 1 mẫu eval, (b) đề xuất 1 dòng skill
 personal. Dòng đó CHỈ được thêm vào knowledge/<role>/personal/<user_id> sau khi người
 xác nhận (accept_suggestion). Không bao giờ đụng _core (specs). Đây là 'door 1' của học có kiểm soát."""
-import json, time, datetime
+import datetime
+import time
 from pathlib import Path
 
-ROOT = Path(__file__).parents[2]
+from src.common import config, jsonl
+
+ROOT = config.ROOT
 LOG = ROOT / "eval/runs/gate_feedback.jsonl"
 KN = ROOT / "knowledge"
 
 
 def record_edit(gate, agent, role, field, before, after, reviewer, user_id,
-                board=None, base_log=None):
+                board=None, base_log=None, task_type=None):
+    """task_type (tuỳ chọn): loại việc của output bị sửa. Có → Autonomy chỉ hạ đúng cặp (agent, task_type);
+    không có → hạ mọi task_type của agent (thận trọng, hành vi cũ)."""
     log = Path(base_log) if base_log else LOG
-    log.parent.mkdir(parents=True, exist_ok=True)
     entry = {"ts": time.time(), "at": datetime.datetime.now().isoformat(timespec="seconds"),
              "gate": gate, "agent": agent, "role": role, "field": field,
              "before": before, "after": after, "reviewer": reviewer, "user_id": user_id}
-    with log.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    if task_type:
+        entry["task_type"] = str(task_type)
+    jsonl.append(log, entry)
     if board is not None:
         board.append("risk_register",
                      {"risk": f"Gate {gate}: người duyệt sửa '{field}'", "severity": "Low",

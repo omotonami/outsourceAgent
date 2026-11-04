@@ -37,7 +37,7 @@ def gate(b, name, who, surface):
     print(f"\u25B6 {name} \u2014 chờ {who} ký (agent không ghi được vùng gate_signatures)")
     for s in surface:
         print(f"   người duyệt thấy trước: {s}")
-    b.sign(name, by=who)
+    b.sign(name, by=who, via="gate_ui")
     print(f"   {who} đã ký {AR} Orchestrator cho đi tiếp")
     line()
 

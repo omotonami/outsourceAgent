@@ -20,7 +20,7 @@ def test_gate_blocks_and_backtrack_revokes():
     o.advance()  # -> AWAIT_G1
     with pytest.raises(TransitionRefused):
         o.advance()  # chưa ký G1
-    b.sign("G1", by="sales_lead")
+    b.sign("G1", by="sales_lead", via="gate_ui")
     o.advance()  # -> DISCOVERY
     o.backtrack("PRESALES", reason="đổi scope", by="pm")
     assert not b.is_signed("G1")
@@ -38,3 +38,60 @@ def test_estimate_schema_accepts_db_driven_shape():
         "assumptions": ["x"], "exclusions": []}
     b.write("estimate", est, agent="a2_estimation")  # không ném là pass
     assert b.get("estimate")["effort_md_total"] == 22.0
+
+
+# ---------- sign(): chỉ gate_ui (review H2 #13) ----------
+@pytest.mark.parametrize("by, via", [
+    ("c1_dev", None), ("c1_dev", "gate_ui"), ("orchestrator", "gate_ui"), ("orchestrator.dispatcher", None),
+    ("auto-L3", "gate_ui"), ("sales_lead", None), ("sales_lead", "worker"), ("", "gate_ui"),
+])
+def test_sign_rejects_non_gate_ui(by, via):
+    b = Blackboard("p")
+    with pytest.raises(PermissionDenied):
+        b.sign("G3", by=by, via=via)
+    assert not b.is_signed("G3")
+
+
+def test_sign_accepts_gate_ui_and_human_via_gate_ui():
+    b = Blackboard("p")
+    b.sign("G1", by="gate_ui")
+    b.sign("G2", by="sales_lead", via="gate_ui")
+    assert b.is_signed("G1") and b.is_signed("G2")
+
+
+# Quyết định 2026-11-03 (c): runtime đọc thẳng specs/, không còn bản sao config trong src/
+def test_runtime_reads_specs_single_source():
+    from pathlib import Path
+    import yaml
+    from src.blackboard import store
+    from src.gateway import router
+    root = Path(__file__).parents[2]
+    assert store.ZONES_FILE == root / "specs/05_blackboard.yaml"
+    assert router.ROUTING_FILE == root / "specs/03_routing.yaml"
+    assert not (root / "src/gateway/routing.yaml").exists()
+    assert not (root / "src/blackboard/permissions.yaml").exists()
+    assert store._PERM == yaml.safe_load(store.ZONES_FILE.read_text(encoding="utf-8"))["zones"]
+    assert router._CFG == yaml.safe_load(router.ROUTING_FILE.read_text(encoding="utf-8"))
+
+
+def test_clarify_answers_zone_in_specs():
+    from src.agents import clarify
+    b = Blackboard("p1")
+    b.write("business_context", {"ambiguities": ["q1", "q2"]}, agent="a1_bu")
+    clarify.resolve(b, "q1", "a1")                     # writer 'clarify' theo specs/05_blackboard.yaml
+    assert clarify.pending(b) == ["q2"]
+    with pytest.raises(PermissionDenied):
+        b.write("clarify_answers", [], agent="a1_bu")
+
+
+# Quyết định 2026-11-03 (d): writer `orchestrator` cho trace_log đã duyệt
+def test_trace_log_orchestrator_writer_approved():
+    from src.blackboard import store
+    line = next(l for l in store.ZONES_FILE.read_text(encoding="utf-8").splitlines()
+                if l.strip().startswith("trace_log:"))
+    assert "approved 2026-11-03" in line
+    assert store._PERM["trace_log"] == {"writers": ["gateway", "orchestrator"], "mode": "append_only"}
+    b = Blackboard("p1")
+    b.append("trace_log", {"event": "SPAWN"}, agent="orchestrator")
+    with pytest.raises(PermissionDenied):
+        b.append("trace_log", {"event": "x"}, agent="c1_dev")

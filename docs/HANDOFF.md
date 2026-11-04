@@ -1,6 +1,10 @@
 # HANDOFF — Outsourcing Multi-Agent Framework (bàn giao context)
 
-Tài liệu này tóm tắt toàn bộ cuộc làm việc để tiếp tục ở account/phiên khác. Dán file này (hoặc nội dung) vào phiên mới, kèm repo `outsourcing-agents-v2.zip`.
+Tài liệu này tóm tắt toàn bộ cuộc làm việc để tiếp tục ở account/phiên khác. Dán file này (hoặc nội dung) vào phiên mới, kèm repo.
+
+> Cập nhật 2026-11-04: thêm bộ vận hành công ty (`src/ops/`, `.claude/`, `START_HERE.md`, `docs/ops/`) — 481 test; người ký gate dự án thật qua dashboard tab "Gate dự án" hoặc `python -m src.ops.gate` (TTY); xem `docs/history/2026-11-04_company-ops-kit.md`.
+>
+> Cập nhật 2026-11-03: đã xong bot team v3 (H1–H5, đề án 0002 — tóm tắt ở `docs/adr/0002-bot-team-v3.md`) và refactor toàn repo (nhánh `feat/v3-bot-team`). Mục 3 và 5 phản ánh trạng thái này.
 
 ---
 
@@ -9,7 +13,7 @@ Tài liệu này tóm tắt toàn bộ cuộc làm việc để tiếp tục ở
 - Làm outsourcing delivery cho client **Singapore** (PDPA, MAS TRM với fintech).
 - Có framework riêng **IDEA → TASK Framework v5** (12 bước) và muốn áp nó để xây hệ multi-agent.
 - Phong cách: tiếng Việt, xưng "mày/tao", thích sơ đồ, muốn thứ chạy được, ghét output dài dòng và việc bắt người làm thay máy.
-- Môi trường: **macOS + VS Code**. Python mặc định 3.9 **không chạy được** (code cần ≥3.10) → dùng `/opt/homebrew/bin/python3.12`. Repo đang ở `~/Downloads/outsourcing-agents-v2`.
+- Môi trường: **macOS + VS Code**. Python mặc định 3.9 **không chạy được** (code cần ≥3.10) → dùng `/opt/homebrew/bin/python3.12`. Cài/lấy repo: theo [`START_HERE.md`](../START_HERE.md) (clone từ `outsourceAgent-company.bundle`, nhánh `feat/v3-bot-team`; zip không có `.git`).
 
 ---
 
@@ -25,7 +29,9 @@ Tài liệu này tóm tắt toàn bộ cuộc làm việc để tiếp tục ở
 
 ---
 
-## 3. Hệ đã xây: `outsourcing-agents-v2` (207 file, có `.git`, 28 test pass)
+## 3. Hệ đã xây: `outsourceAgent` (nhánh `feat/v3-bot-team`, 481 test pass, `agent_lint --all` 14/14)
+
+Lịch sử thay đổi theo đợt + quyết định của chủ repo (ngày giờ, commit, số test): [`docs/history/`](history/README.md).
 
 ### Cấu trúc thư mục
 ```
@@ -33,15 +39,18 @@ specs/      LUẬT (admin): 00_overview · 01_state_machine.yaml · 02_agents/<i
             · 04_schemas/ · 05_blackboard.yaml · 06_gates.md
 knowledge/  KINH NGHIỆM + HỆ HỌC, theo role: <role>/team · personal/<user> · learned/
 data/       historical_projects · rate_cards · sizing_model.yaml · templates (proposal, SOW, DESIGN.md)
-src/        orchestrator · gateway · blackboard · agents · tools · store · learning · feedback
-            · reconcile · iso · gate_ui · server (dashboard) · demo
+config/     budgets.yaml (token, dispatcher, huddle, factory) · autonomy.yaml · models.lock · providers.yaml
+src/        common (config loader, jsonl) · governance (xác nhận người) · orchestrator (+ dispatcher/,
+            autonomy, huddle_trigger, team_feed, events) · gateway · blackboard (+ proxy) · agents · factory
+            · tools · store · learning · feedback · reconcile · iso · gate_ui · server (dashboard) · demo
 eval/       holdout · metrics · testsets · baselines · runs
 tests/      unit + contract
-docs/       SPEC.md · TOOL_GUIDE.md · framework.md · runbook.md · training-loops.md · dashboard.md · adr/
+docs/       SPEC.md · HANDOFF.md · TOOL_GUIDE.md · factory · dispatcher · huddle · autonomy · cos · team-feed
+            · dashboard · runbook · training-loops · framework · adr/ (0001, 0002)
 CLAUDE.md   hiến pháp cho Claude Code
 ```
 
-### 11 agent + PM (thứ tự = dòng chảy; chữ = phase, số = thứ tự)
+### 14 agent (11 theo dòng chảy + PM + CoS + Factory interviewer; chữ = phase, số = thứ tự)
 | Agent | Đọc | Ghi | Gate sau |
 |---|---|---|---|
 | a1_bu | lead_brief | business_context | |
@@ -56,6 +65,8 @@ CLAUDE.md   hiến pháp cho Claude Code
 | c3_qc | build_results | build_results (verdict) | **G3** Tech Lead (merge) |
 | d1_soc (defensive) | build_results | security_report | **G4** TL + bảo mật (release) |
 | e1_pm (CHỈ ĐỌC) | project_status, risk_register | không ghi gì | (cross-cutting) |
+| e2_cos (Chief of Staff) | project_status, risk mở, decision_records, Team feed | không ghi; tạo `lead_brief` / `clarify_answers` chỉ khi người xác nhận | (cross-cutting) |
+| factory_interviewer | ý tưởng agent mới | không ghi Blackboard; nháp answers (RECOMMENDATION) | (Factory) |
 
 ### Cơ chế chính
 - **Orchestrator** = state machine thuần Code; guard cho từng transition; gate từ chối → backtrack + huỷ chữ ký gate phía sau; loop >3 / Opus fail / vượt budget → ESCALATED.
@@ -67,14 +78,16 @@ CLAUDE.md   hiến pháp cho Claude Code
 - **3 vòng học**: (1) gate feedback → đề xuất skill personal (người xác nhận); (2) reconcile khi đóng dự án → historical DB → lần sau thành FACT; (3) **revision_log** ghi mọi lượt user sửa → Reflection đọc ngay trong phiên → **distiller** đếm pattern lặp ≥3 → `knowledge/<role>/learned/PROPOSED.md` → eval regression + người duyệt → mới thành `learned/SKILL.md`. Phân biệt kind `edit` (học) và `preference` (nhiễu).
 - **ISO 42001/42005** (`src/iso/`): inventory, impact triage + nháp đánh giá tác động, conformance check → gaps. Là "conformance-ready", không phải chứng chỉ.
 - **UI skills**: 5 skill internet (hallmark, taste-skill, awesome-design-md, ui-ux-pro-max, open-design) hợp nhất thành **một** skill `knowledge/ui/team/SKILL.md` quanh trục **DESIGN.md** (nền chung + bảng vai trò bổ sung), trạng thái *candidate*, chỉ diễn giải nguyên tắc, không chép nội dung; chưa kiểm license từng repo (taste-skill ghi MIT).
+- **Bot team v3** (lớp trên lõi, không đổi state machine/guard): **Factory** sinh agent mới (Code, nhánh `factory/<id>`, L0) · **Dispatcher** phát `task_backlog` song song (DAG, `owns`, worktree `task/<id>`, budget chung, ttl/KILL, depth 1 theo dự án, phát ASSIGN/SPAWN/RESULT/BLOCKED/KILL) · **Huddle** Proposer→Critic→Decider ra `decision_record` (gọi tay, không nối state machine) · **Autonomy** L0–L2 theo (agent, task_type), L3 bảo lưu · **CoS** `e2_cos` một cửa cho người + **Team feed** + Figma chỉ đọc.
 - **PM**: Orchestrator ghi `project_status` (phase, %task, gate, budget, risk mở, question quá hạn, loop); `e1_pm` chỉ đọc → báo cáo + cảnh báo cho PM người; PM người quyết ưu tiên/scope, ký G2, chịu trách nhiệm. Dashboard `/api/pm`.
 
 ### Lệnh dùng
 ```bash
-cd ~/Downloads/outsourcing-agents-v2
 /opt/homebrew/bin/python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pytest -q                              # 28 test, không cần key
+pytest -q                              # 481 test, không cần key
+python -m src.factory.agent_lint --all # 14/14
+python -m src.tools.checks.history_check --base main   # luật 9 (CLAUDE.md)
 python -m src.demo.dry_run             # mock cả 4 phase
 export ANTHROPIC_API_KEY=sk-ant-...
 python -m src.demo.live_one            # chạy thật A1 BU
@@ -98,6 +111,12 @@ uvicorn src.server.app:app --reload    # dashboard localhost:8000
 
 ## 5. VIỆC CÒN DỞ (ưu tiên từ trên xuống)
 
+### 5.0 Bot team v3 — đã xong, còn mở
+- Đã xong H1–H5 + refactor (2026-11-03). Chưa push/PR (chủ repo quyết sau).
+- Bảo lưu theo quyết định: L3 auto-gate; nối Huddle vào state machine.
+- `specs/05_blackboard.yaml` comment của `trace_log` chưa ghi ASSIGN (Dispatcher đã phát) — sửa khi chủ repo duyệt specs.
+- `clarify.resolve` còn nhánh fallback ghi thẳng `board._data` khi `write` lỗi (di sản trước khi có zone `clarify_answers`) — cần chủ repo quyết bỏ.
+
 ### 5.1 Dynamic Re-routing — ĐÃ THIẾT KẾ, CHƯA CODE
 Vấn đề: hiện QC fail luôn trả về Dev (tối đa 3 vòng rồi escalate Tech Lead). Lỗi do **AC sai business** thì vòng Dev↔QC không sửa được, và nguy hiểm hơn là QC có thể **pass code sai mà không biết** vì code khớp AC.
 
@@ -119,11 +138,11 @@ Thiết kế đã thống nhất:
 
 ### 5.2 Các việc khác
 - Chưa chạy model thật lần nào (sandbox không có mạng/key) — `live_one` và nút "Thật" trong artifact cần thử, gửi lỗi schema nếu có.
-- MODULE 3 TASK của một số agent còn mức cơ bản; tool ngoài (Jira, Figma, repo, scanner) là stub.
+- MODULE 3 TASK của một số agent còn mức cơ bản; tool ngoài Jira, Confluence, scanner bảo mật còn stub (repo = git cục bộ thật, Figma = chỉ đọc).
 - Eval regression chưa chạy (cần dữ liệu dự án cũ) → mọi skill team/learned vẫn candidate.
 - Nối `revision.record` vào dashboard/artifact để vòng 3 tự ghi; lên lịch chạy distiller.
 - Bước preview render `ui_system` (tokens.css + component) trên dashboard.
-- Có **2 bản transitions.yaml** (`src/orchestrator/` và `specs/01_state_machine.yaml`) → nên gộp về một nguồn để khỏi lệch.
+- Có **2 bản transitions.yaml** (`src/orchestrator/` và `specs/01_state_machine.yaml`) → nên gộp về một nguồn để khỏi lệch (đã gộp được routing/blackboard; state machine chưa).
 - Chưa push GitHub: `gh repo create outsourcing-agents --private --source=. --push`.
 - Kiểm LICENSE 5 repo UI skill trước khi dùng thương mại.
 
@@ -133,14 +152,14 @@ Thiết kế đã thống nhất:
 
 - Sửa file tiếng Việt bằng `sed`/thao tác chuỗi trong shell làm **hỏng byte UTF-8** (mất lead byte `0xe1`). Viết file bằng heredoc hoặc Python `open(..., encoding="utf-8")`, và quét UTF-8 toàn repo sau mỗi lần sửa.
 - Sandbox không cài được `jsonschema` thật; dùng stub validate rỗng đã che một bug schema (estimate.source). Đã thay bằng stub kiểm tra thật — luôn test với validator thật trên máy.
-- Script chạy sai thư mục từng tạo thư mục lồng `outsourcing-agents-v2/outsourcing-agents-v2/` (đã xoá).
+- Script chạy sai thư mục từng tạo thư mục repo lồng nhau (đã xoá) — luôn chạy lệnh ở gốc repo.
 - Python 3.9 trên macOS lỗi cú pháp `X | None` → dùng 3.12.
 
 ---
 
 ## 7. Tài sản đã tạo
 
-- `outsourcing-agents-v2.zip` — repo đầy đủ kèm `.git` (bản chính).
+- `outsourceAgent-company.bundle` — repo đầy đủ lịch sử (bản chính, `main` + `feat/v3-bot-team`); `outsourceAgent-company.zip` = `git archive`, không có `.git`, chỉ để đọc. Cách cài: `START_HERE.md`.
 - `docs/SPEC.md` (workflow + 5 diagram mermaid), `docs/TOOL_GUIDE.md` (cây + cách dùng).
 - Artifact mô phỏng phía client (không nối engine Python): `pipeline-interactive.jsx` (nhập brief, Mock/Thật, clarify + AI đề xuất, function list, gate, ISO, bảng model·token·chi phí), `pipeline-visual.jsx`, `presales-demo.jsx`.
 - Claude Doc "Outsourcing Delivery — Multi-Agent Framework (SG market) v2" ở account cũ (account mới không mở được trừ khi được share).
@@ -149,4 +168,4 @@ Thiết kế đã thống nhất:
 
 ## 8. Prompt mở đầu cho phiên mới
 
-> Tôi đang xây hệ multi-agent outsourcing delivery theo framework IDEA → TASK v5 của tôi. Đây là file HANDOFF.md và repo outsourcing-agents-v2 (đính kèm). Đọc kỹ cả hai, đặc biệt mục 4 (quyết định đã chốt — đừng đổi) và mục 5.1. Việc tiếp theo: code **Dynamic Re-routing** đúng thiết kế ở 5.1, kèm test, chạy pytest, cập nhật docs/SPEC.md. Trả lời tiếng Việt, ngắn gọn, ưu tiên làm thật và có test.
+> Tôi đang xây hệ multi-agent outsourcing delivery theo framework IDEA → TASK v5 của tôi. Đây là file HANDOFF.md và repo outsourceAgent (clone từ bundle theo START_HERE.md). Đọc kỹ cả hai, đặc biệt mục 4 (quyết định đã chốt — đừng đổi) và mục 5.1. Việc tiếp theo: code **Dynamic Re-routing** đúng thiết kế ở 5.1, kèm test, chạy pytest, cập nhật docs/SPEC.md. Trả lời tiếng Việt, ngắn gọn, ưu tiên làm thật và có test.

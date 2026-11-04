@@ -1,0 +1,1002 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phòng 3D — team agent</title>
+<!-- Three.js pin phiên bản, nạp từ CDN (ES module + importmap). Không có server → DEMO MODE. -->
+<script type="importmap">
+{"imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+}}
+</script>
+<style>
+:root{--paper:#FBFAF7;--panel:#fff;--ink:#1A2332;--muted:#5C6B7A;--line:#E6E8EC;--soft:#F4F2EE;
+--A:#E08A3C;--B:#3B7DD8;--C:#23A08F;--D:#7C5CC4;--E:#C9A227;--O:#6B7785;
+--ASSIGN:#3B7DD8;--SPAWN:#23A08F;--RESULT:#15803D;--BLOCKED:#C0392B;--DECISION:#7C5CC4;--KILL:#6B7785;--GATE:#B5720E}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);
+font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+body{display:flex;overflow:hidden}
+#stage{position:relative;flex:0 0 65%;min-width:0;height:100vh;background:#F1ECE4;overflow:hidden}
+#stage canvas{display:block;touch-action:none}
+#labels{position:absolute;inset:0;pointer-events:none;z-index:1}   /* stacking context: nhãn 3D không đè HUD */
+#panel{flex:1;min-width:0;height:100vh;display:flex;flex-direction:column;background:var(--paper);border-left:1px solid var(--line)}
+.hud{position:absolute;left:12px;right:12px;top:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;pointer-events:none;z-index:3}
+.hud>*{pointer-events:auto}
+.ttl{background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:10px;padding:7px 11px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.ttl b{font-size:14px}.ttl .sub{font-size:11px;color:var(--muted);margin-top:1px}
+.ttl a{color:var(--muted);font-size:11px;text-decoration:none;margin-left:6px}
+.badge{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.06em;padding:2px 6px;border-radius:5px;margin-left:6px;vertical-align:2px}
+.badge.demo{background:#B5720E;color:#fff}.badge.live{background:#15803D;color:#fff}.badge.replay{background:#7C5CC4;color:#fff}
+.prow{display:none;align-items:center;gap:6px;margin-top:5px}.prow.show{display:flex}
+.prow select{font:600 11.5px/1.2 inherit;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px 4px;max-width:270px}
+.ldot{width:8px;height:8px;border-radius:50%;background:#cbd2d9;flex:none}.ldot.on{background:#15803D;box-shadow:0 0 0 3px rgba(21,128,61,.2);animation:pulse2 1.6s ease-in-out infinite}
+@keyframes pulse2{50%{box-shadow:0 0 0 5px rgba(21,128,61,.08)}}
+.prow .rp{font:700 11px inherit;border:1px solid var(--line);background:#fff;border-radius:6px;padding:3px 7px;cursor:pointer;color:var(--ink);text-decoration:none}
+/* token đã đốt — góc phải trên canvas */
+.usage{position:absolute;right:12px;top:58px;z-index:3;min-width:150px;max-width:230px;background:rgba(255,255,255,.93);border:1px solid var(--line);
+border-radius:10px;padding:6px 10px;box-shadow:0 1px 3px rgba(0,0,0,.05);cursor:pointer;user-select:none;font-variant-numeric:tabular-nums}
+.usage .u1{display:flex;align-items:baseline;gap:5px;white-space:nowrap}
+.usage .ut{font-size:16px;font-weight:800}.usage .uu{font-size:10.5px;color:var(--muted);font-weight:700}
+.usage .uc{margin-left:auto;font-size:11.5px;font-weight:700;color:#5C6B7A}
+.usage .uarr{font-size:10px;color:#15803D;opacity:0;transition:opacity .2s}
+.usage.up .uarr{opacity:1}.usage.up .ut{animation:tick .9s ease-out}
+@keyframes tick{0%{color:#15803D}100%{color:var(--ink)}}
+.usage .ubar{display:none;height:5px;border-radius:3px;background:#EEF1F4;margin-top:5px;overflow:hidden}.usage .ubar.show{display:block}
+.usage .ubar i{display:block;height:100%;width:0;background:#15803D;transition:width .4s}
+.usage .ubar.warn i{background:#D9A21B}.usage .ubar.over i{background:#C0392B}
+.usage .upct{display:none;font-size:10px;color:var(--muted);margin-top:2px}.usage .upct.show{display:block}
+.usage .ulist{display:none;margin-top:6px;border-top:1px solid var(--line);padding-top:5px}.usage.open .ulist{display:block}
+.usage .ur{display:grid;grid-template-columns:1fr auto;gap:1px 8px;font-size:11px;padding:2px 0}
+.usage .ur b{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.usage .ur span{color:var(--muted)}
+.usage .ur i{grid-column:1/3;display:block;height:3px;border-radius:2px;background:#3B7DD8;opacity:.55}
+.usage .usub{font-size:10px;color:var(--muted);margin-top:4px}
+.ctl{display:flex;gap:4px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:10px;padding:4px}
+.ctl button{border:0;background:transparent;color:var(--ink);font:600 12px/1 inherit;padding:7px 9px;border-radius:7px;cursor:pointer;min-width:34px}
+.ctl button.on{background:var(--ink);color:#fff}
+.gatebar{position:absolute;left:50%;top:60px;transform:translateX(-50%);background:#FBF0DC;color:#7A4B06;border:1px solid #EBC98A;
+border-radius:999px;padding:6px 14px;font-size:12.5px;font-weight:700;z-index:3;display:none;white-space:nowrap;max-width:92%;overflow:hidden;text-overflow:ellipsis}
+.gatebar.show{display:block}
+.legend{position:absolute;left:12px;bottom:10px;display:flex;flex-wrap:wrap;gap:4px;z-index:3;pointer-events:none;max-width:70%}
+.legend span{background:rgba(255,255,255,.88);border-radius:999px;padding:3px 8px 3px 6px;font-size:10.5px;font-weight:700;color:var(--ink);border:1px solid var(--line)}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:0}
+.hint{position:absolute;right:12px;bottom:10px;font-size:10.5px;color:var(--muted);z-index:3;pointer-events:none}
+/* nhãn 3D */
+.lbl{pointer-events:auto;cursor:pointer;display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.92);border:1px solid rgba(26,35,50,.12);
+border-radius:999px;padding:2px 7px 2px 5px;font-size:10.5px;font-weight:700;white-space:nowrap;transform:translateY(-4px);user-select:none}
+.lbl .d{width:7px;height:7px;border-radius:50%}
+.lbl.sel{outline:2px solid var(--ink)}
+.lbl.child{font-size:9.5px;padding:1px 6px 1px 4px;opacity:.95}
+.lbl .st{width:6px;height:6px;border-radius:50%;background:#cbd2d9}
+.lbl .st.working{background:#15803D}.lbl .st.blocked{background:#C0392B}.lbl .st.waiting_gate{background:#B5720E}
+.alert{pointer-events:none;width:22px;height:22px;border-radius:50%;display:none;align-items:center;justify-content:center;
+font:900 14px/1 inherit;color:#fff;background:#C0392B;box-shadow:0 0 0 3px rgba(192,57,43,.25);transform:translateY(-6px)}
+.alert.show{display:flex;animation:pulse 1.1s ease-in-out infinite}
+.alert.gate{background:#B5720E;box-shadow:0 0 0 3px rgba(181,114,14,.25);font-size:12px}
+@keyframes pulse{50%{transform:translateY(-9px) scale(1.08)}}
+.bub{pointer-events:none;max-width:190px;background:#fff;color:var(--ink);border:1.5px solid var(--ink);border-radius:10px;padding:5px 8px;
+font-size:11px;font-weight:600;line-height:1.3;opacity:0;transform:translateY(-14px) scale(.9);transition:opacity .18s,transform .18s;position:relative;
+box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.bub.show{opacity:1;transform:translateY(-22px) scale(1)}
+.bub::after{content:"";position:absolute;left:50%;bottom:-6px;width:9px;height:9px;background:#fff;border-right:1.5px solid var(--ink);
+border-bottom:1.5px solid var(--ink);transform:translateX(-50%) rotate(45deg)}
+.bub .k{font-size:9px;font-weight:800;letter-spacing:.04em;margin-right:4px}
+.zone{pointer-events:none;font-size:11px;font-weight:800;color:#fff;border-radius:6px;padding:3px 8px;letter-spacing:.02em;white-space:nowrap;opacity:.95}
+.zone.obj{background:#fff;color:var(--muted);border:1px solid var(--line);font-weight:700;font-size:10px}
+/* panel */
+.sec{display:flex;flex-direction:column;min-height:0;border-bottom:1px solid var(--line)}
+#secLog{flex:1.45}#secTask{flex:1}#secAgent{flex:1.15;border-bottom:0}
+.sh{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 14px 7px;background:var(--panel);border-bottom:1px solid var(--line)}
+.sh b{font-size:13px}.sh .n{color:var(--muted);font-weight:600;font-size:12px;margin-left:4px}
+.sh small{font-size:10.5px;color:var(--muted)}
+.body{overflow:auto;flex:1;min-height:0;padding:2px 10px 8px;-webkit-overflow-scrolling:touch}
+.filter{display:none;align-items:center;gap:6px;margin:8px 10px 0;padding:6px 10px;border-radius:8px;background:#EEF3FB;font-size:12px;font-weight:600}
+.filter.show{display:flex}.filter button{margin-left:auto;border:0;background:var(--ink);color:#fff;border-radius:6px;font:700 11px inherit;padding:4px 8px;cursor:pointer}
+.msg{display:flex;gap:8px;padding:7px 6px;border-bottom:1px solid var(--line);font-size:12.5px;border-radius:6px;transition:background .3s}
+.msg.live{background:#FFF6D6}
+.msg.new{animation:slidein .35s ease-out}
+@keyframes slidein{from{opacity:0;transform:translateY(-6px)}}
+.msg .ty{flex:none;width:66px;font-size:9.5px;font-weight:800;text-align:center;padding:3px 0;border-radius:4px;color:#fff;height:fit-content;letter-spacing:.03em}
+.msg .rt{font-size:11.5px;color:var(--muted)}.msg .rt b{color:var(--ink)}
+.msg .sm{margin-top:1px;line-height:1.35;word-break:break-word}
+.msg .tm{font-variant-numeric:tabular-nums;font-size:10.5px;color:#9AA5B1;margin-left:4px}
+.empty{color:var(--muted);font-size:12px;padding:12px 6px}
+.counts{display:flex;flex-wrap:wrap;gap:4px;padding:8px 2px 4px}
+.chip{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;border:1px solid transparent;white-space:nowrap}
+.c-ready{background:#EEF1F4;color:#46525F}.c-in_dev{background:#E3EEFB;color:#1F5BB0}.c-testing{background:#E6F2F1;color:#0F6E6E}
+.c-qc{background:#EFE9FA;color:#5B3FA6}.c-await_merge{background:#E5F4EA;color:#15803D}.c-blocked{background:#FBE7E4;color:#A3281B}
+.c-merged{background:#1A2332;color:#fff}
+.task{display:grid;grid-template-columns:auto 1fr auto;gap:2px 8px;align-items:center;padding:7px 4px;border-bottom:1px solid var(--line);font-size:12.5px}
+.task .id{font-weight:800;font-size:12px}.task .tt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.task .meta{grid-column:2/4;font-size:10.5px;color:var(--muted)}
+.task.flash{animation:flash 1s}
+@keyframes flash{30%{background:#FFF6D6}}
+.ag{display:grid;grid-template-columns:10px 1fr auto;gap:2px 8px;align-items:center;padding:6px 6px;border-bottom:1px solid var(--line);
+font-size:12.5px;cursor:pointer;border-radius:6px}
+.ag:hover{background:var(--soft)}.ag.sel{background:#EEF3FB}
+.ag .d{width:10px;height:10px;border-radius:50%}
+.ag .nm{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ag .nm small{font-weight:600;color:var(--muted);margin-left:4px}
+.ag .meta{grid-column:2/4;font-size:10.5px;color:var(--muted)}
+.s-idle{background:#EEF1F4;color:#5C6B7A}.s-working{background:#E5F4EA;color:#15803D}.s-blocked{background:#FBE7E4;color:#A3281B}
+.s-waiting_gate{background:#FBF0DC;color:#8A560A}
+.lv{font-size:9.5px;font-weight:800;color:#5C6B7A;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-left:4px}
+.foot{font-size:10.5px;color:var(--muted);padding:6px 14px;border-top:1px solid var(--line);background:var(--panel)}
+#err{position:absolute;inset:auto 12px 44px 12px;background:#FBE7E4;color:#7A1E14;border-radius:8px;padding:8px 10px;font-size:12px;display:none;z-index:4}
+@media(max-width:760px){
+  body{flex-direction:column;height:auto;overflow:auto}
+  #stage{flex:none;width:100%;height:64vh;min-height:360px}
+  #panel{height:auto;border-left:0;border-top:1px solid var(--line)}
+  .sec{flex:none!important}.body{max-height:44vh}
+  .ttl .sub{display:none}.ttl{padding:6px 9px}.ttl b{font-size:12.5px}.ttl a{display:none}.badge{margin-left:4px}
+  .hud{left:8px;right:8px;top:8px}.legend{left:8px}.legend{max-width:100%;right:8px;bottom:6px;gap:3px}.legend span{font-size:9.5px;padding:2px 6px 2px 5px}.hint{display:none}
+  .lbl{font-size:9px;padding:1px 5px 1px 4px;gap:3px;transform:translateY(-12px)}.lbl .d{width:6px;height:6px}.lbl.child{font-size:8.5px}
+  .bub{max-width:140px;font-size:10px}.zone{font-size:8.5px;padding:2px 5px}.alert{width:16px;height:16px;font-size:11px}.gatebar{top:56px;font-size:11.5px}
+  .ctl button{padding:7px 7px;min-width:30px}
+  .prow select{max-width:170px;font-size:11px}.prow .rp{padding:3px 5px}.ttl{max-width:64%}
+  .usage{top:52px;right:8px;min-width:0;max-width:60%;padding:4px 8px}.usage .ut{font-size:13px}
+  .usage .ubar{display:none!important}.usage .uu{display:none}
+}
+@media (prefers-reduced-motion: reduce){
+  .alert.show{animation:none}.msg.new{animation:none}.ldot.on{animation:none}.usage.up .ut{animation:none}.bub{transition:none}.task.flash{animation:none}
+}
+</style></head><body>
+<div id="stage">
+  <div id="labels"></div>
+  <div class="hud">
+    <div class="ttl"><b>Phòng 3D · team agent</b><span id="badge" class="badge demo">DEMO</span><a href="/">← Dashboard</a>
+      <div class="sub" id="modeTxt">Kịch bản mẫu chạy lặp</div>
+      <div class="prow" id="prow"><span class="ldot" id="ldot" title="đang hoạt động"></span>
+        <select id="proj" aria-label="Chọn project"></select><a class="rp" id="rpBtn" href="#" title="Xem lại từ đầu">⟲ Replay</a></div></div>
+    <div class="ctl" role="group" aria-label="Điều khiển">
+      <button id="pause" title="Tạm dừng / chạy tiếp">❚❚</button>
+      <button data-sp="1" class="on">1x</button><button data-sp="2">2x</button><button data-sp="4">4x</button>
+      <button id="home" title="Về góc nhìn mặc định">⌂</button>
+    </div>
+  </div>
+  <div class="gatebar" id="gatebar"></div>
+  <div class="usage" id="usage" role="button" tabindex="0" aria-expanded="false" title="Token đã đốt — bấm xem top agent">
+    <div class="u1"><span class="ut" id="uTot">0</span><span class="uu">token</span><span class="uarr">▲</span><span class="uc" id="uCost">$—</span></div>
+    <div class="ubar" id="uBar"><i></i></div><div class="upct" id="uPct"></div>
+    <div class="ulist" id="uList"></div>
+  </div>
+  <div class="legend" id="legend"></div>
+  <div class="hint">Kéo để xoay · cuộn để zoom · bấm nhân vật để lọc</div>
+  <div id="err"></div>
+</div>
+<div id="panel">
+  <div class="filter" id="filter"><span id="filterTxt"></span><button id="clearF">Bỏ lọc ✕</button></div>
+  <section class="sec" id="secLog"><div class="sh"><b>Trao đổi<span class="n" id="nLog"></span></b><small>mới nhất ở trên · chỉ summary</small></div>
+    <div class="body" id="log"></div></section>
+  <section class="sec" id="secTask"><div class="sh"><b>Task<span class="n" id="nTask"></span></b><small>ready → in_dev → testing → qc → await_merge</small></div>
+    <div class="body"><div class="counts" id="tcounts"></div><div id="tasks"></div></div></section>
+  <section class="sec" id="secAgent"><div class="sh"><b>Agent<span class="n" id="nAgent"></span></b><small>bấm để focus camera</small></div>
+    <div class="body" id="agents"></div></section>
+  <div class="foot">Chỉ đọc · không hiển thị raw thinking · gate do người ký trên Dashboard</div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+// ---------------- hằng số ----------------
+const PHASES = {A:'Presales',B:'Discovery',C:'Build',D:'Security',E:'Ops'};
+const PCOL = {A:'#E08A3C',B:'#3B7DD8',C:'#23A08F',D:'#7C5CC4',E:'#C9A227',O:'#6B7785'};
+const TCOL = {ASSIGN:'#3B7DD8',SPAWN:'#23A08F',RESULT:'#15803D',BLOCKED:'#C0392B',DECISION:'#7C5CC4',KILL:'#6B7785',GATE:'#B5720E'};
+const ST_VI = {idle:'rảnh',working:'đang làm',blocked:'bị chặn',waiting_gate:'chờ gate'};
+const TASK_ST = ['ready','in_dev','testing','qc','await_merge','blocked','merged'];
+const TASK_VI = {ready:'sẵn sàng',in_dev:'đang code',testing:'đang test',qc:'đang QC',await_merge:'chờ merge',blocked:'bị chặn',merged:'đã merge'};
+const DISPATCHER = 'orchestrator.dispatcher';
+const ALIAS = {orchestrator: DISPATCHER};
+const SHORT = {a1_bu:'A1 BU',a2_estimation:'A2 Estimation',a3_proposal:'A3 Proposal',b1_ba:'B1 BA',b2_ux:'B2 UX',b3_ui:'B3 UI',
+  b4_tech_lead:'B4 Tech Lead',c1_dev:'C1 Dev',c2_tester:'C2 Tester',c3_qc:'C3 QC',d1_soc:'D1 SOC',e1_pm:'E1 PM',e2_cos:'E2 CoS',
+  factory_interviewer:'Factory', [DISPATCHER]:'Điều phối', huddle:'Huddle', human:'Người duyệt'};
+const FALLBACK_AGENTS = [
+  ['a1_bu','A1 Business-Understanding','bu'],['a2_estimation','A2 Estimation','estimation'],['a3_proposal','A3 Proposal','proposal'],
+  ['b1_ba','B1 BA','ba'],['b2_ux','B2 UX Designer','ux'],['b3_ui','B3 UI Designer','ui'],['b4_tech_lead','B4 Tech Lead','tech_lead'],
+  ['c1_dev','C1 Dev','dev'],['c2_tester','C2 Tester','tester'],['c3_qc','C3 QC','qc'],['d1_soc','D1 SOC (defensive only)','soc'],
+  ['e1_pm','E1 PM (reporting, chỉ đọc)','pm'],['e2_cos','E2 Chief of Staff','cos'],['factory_interviewer','Factory Interviewer','interviewer'],
+].map(([id,name,role])=>({id,name,role,phase:phaseOf(id),status:'idle',current_task:null,tasks:[],level:null}));
+function phaseOf(id){const p=id[0].toUpperCase();return PHASES[p]&&/\d/.test(id[1]||'')?p:'E'}
+const nameOf = id => SHORT[id] || (id||'—');
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const NARROW = matchMedia('(max-width:760px)').matches;
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---------------- bố cục phòng ----------------
+// Hàng sau: bàn z=-4.6, người đứng z=-5.3, đi ra lối BACK (z=-2.6). Hàng trước: bàn z=4.4, người z=3.7, lối FRONT (z=2.0).
+const LANE = {back:-2.6, front:2.0};
+const DESK = {
+  a1_bu:[-11.4,'back'],a2_estimation:[-9.4,'back'],a3_proposal:[-7.4,'back'],
+  b1_ba:[-3.6,'back'],b2_ux:[-1.6,'back'],b3_ui:[0.4,'back'],b4_tech_lead:[2.4,'back'],
+  e1_pm:[6.8,'back'],e2_cos:[8.8,'back'],factory_interviewer:[10.8,'back'],
+  c1_dev:[-6.2,'front'],c2_tester:[-3.4,'front'],c3_qc:[-0.8,'front'],d1_soc:[6.0,'front'],
+};
+const ROW_Z = {back:{desk:-4.6,home:-5.3},front:{desk:4.4,home:3.7}};
+const HUB = {x:-5.6,z:-0.3}, HUDDLE = {x:4.6,z:-0.3,r:0.85};
+const FORBID = [[HUB.x-1.5,HUB.x+1.5],[HUDDLE.x-2.0,HUDDLE.x+2.0]];   // vùng giữa không được băng qua
+const CHILD_SLOTS = [[-8.0,3.15],[-9.2,3.15],[-10.4,3.15],[-11.6,3.15],[-8.6,5.4],[-9.8,5.4],[-11.0,5.4]];
+const SEATS = [200,340,160,20,250,290].map(a=>{const r=a*Math.PI/180;return [HUDDLE.x+1.4*Math.cos(r),HUDDLE.z+1.4*Math.sin(r)*0.9]});
+const ZONES = [ // rug: phase, cx, cz, w, d
+  ['A',-9.4,-4.9,6.6,3.6],['B',-0.6,-4.9,8.6,3.6],['E',8.8,-4.9,6.6,3.6],['C',-6.0,4.3,13.2,3.5],['D',6.0,4.3,4.4,3.5]];
+
+// ---------------- three.js cơ bản ----------------
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'low-power'});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.prepend(renderer.domElement);
+const labelR = new CSS2DRenderer({element: document.getElementById('labels')});
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#F1ECE4');
+scene.fog = new THREE.Fog('#F1ECE4', 48, 90);
+const camera = new THREE.PerspectiveCamera(34, 1, 0.5, 200);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = !RM; controls.dampingFactor = 0.08;
+controls.maxPolarAngle = 1.22; controls.minPolarAngle = 0.35; controls.minDistance = 7; controls.maxDistance = 70;
+controls.screenSpacePanning = false;
+// Desktop: nhìn chéo từ phía trước. Mobile (dọc): nhìn từ cạnh phải để chiều dài phòng chạy dọc màn hình.
+const VIEW_DIR = (NARROW ? new THREE.Vector3(0.72, 1.0, 0.03) : new THREE.Vector3(0.14, 1.0, 0.66)).normalize();
+const VIEW_TARGET = new THREE.Vector3(-0.3, 0, -0.3);
+const ROOM_CORNERS = [];
+for (const x of [-15.3,14.7]) for (const y of [0,1.6]) for (const z of [-8.4,7.8]) ROOM_CORNERS.push(new THREE.Vector3(x,y,z));
+
+scene.add(new THREE.HemisphereLight('#ffffff', '#d9cfbf', 1.55));
+const sun = new THREE.DirectionalLight('#fff4e5', 1.7);
+sun.position.set(9, 18, 11); sun.castShadow = true;
+sun.shadow.mapSize.set(NARROW?512:1024, NARROW?512:1024);
+Object.assign(sun.shadow.camera, {left:-17,right:17,top:12,bottom:-12,near:2,far:50});
+sun.shadow.bias = -0.0008; sun.shadow.radius = 3;
+scene.add(sun);
+
+const MATS = new Map();
+function mat(color, opts={}){
+  const k = color + JSON.stringify(opts);
+  if (!MATS.has(k)) MATS.set(k, new THREE.MeshStandardMaterial({color, roughness:0.85, metalness:0.0, flatShading:true, ...opts}));
+  return MATS.get(k);
+}
+function mesh(geo, m, {cast=true, recv=false}={}){const o=new THREE.Mesh(geo,m);o.castShadow=cast;o.receiveShadow=recv;return o}
+function box(w,h,d,c,o){return mesh(new THREE.BoxGeometry(w,h,d), typeof c==='string'?mat(c):c, o)}
+function cyl(rt,rb,h,c,seg=8,o){return mesh(new THREE.CylinderGeometry(rt,rb,h,seg), typeof c==='string'?mat(c):c, o)}
+function css(cls, html){const d=document.createElement('div');d.className=cls;d.innerHTML=html||'';return d}
+function wrap(el){const w=document.createElement('div');w.style.pointerEvents='none';w.appendChild(el);return w}
+function label2d(el, y, parent){const o=new CSS2DObject(wrap(el));o.position.set(0,y,0);parent.add(o);return o}
+function mix(a,b,t){return '#'+new THREE.Color(a).lerp(new THREE.Color(b),t).getHexString()}
+
+// ---------------- phòng ----------------
+function buildRoom(){
+  const floor = box(29.5, 0.3, 15.6, '#E9E3D8', {cast:false, recv:true}); floor.position.set(-0.3,-0.15,-0.3); scene.add(floor);
+  const grid = new THREE.GridHelper(29, 29, '#DDD5C7', '#E2DBCE'); grid.position.set(-0.3,0.005,-0.3);
+  grid.scale.z = 15.4/29; scene.add(grid);
+  const wallC = '#DCD4C6';
+  const back = box(29.5, 1.5, 0.3, wallC, {recv:true}); back.position.set(-0.3,0.75,-8.25); scene.add(back);
+  const left = box(0.3, 1.5, 15.6, wallC, {recv:true}); left.position.set(-15.2,0.75,-0.3); scene.add(left);
+  const right = box(0.3, 0.35, 15.6, wallC); right.position.set(14.6,0.17,-0.3); scene.add(right);
+  const front = box(29.5, 0.25, 0.3, wallC); front.position.set(-0.3,0.12,7.65); scene.add(front);
+  // bảng trắng trên tường sau + cây
+  const wb = box(4.2,1.0,0.06,'#ffffff'); wb.position.set(-0.6,1.0,-8.05); scene.add(wb);
+  [['#E08A3C',-2.0],['#3B7DD8',-0.9],['#23A08F',0.2],['#7C5CC4',1.1]].forEach(([c,x],i)=>{const s=box(0.5,0.32,0.02,c,{cast:false});s.position.set(x,1.1-(i%2)*0.22,-8.0);scene.add(s)});
+  for (const [x,z] of [[-14.3,-7.4],[13.7,-7.4],[-14.3,6.8],[13.6,6.6],[3.6,6.8]]) plant(x,z);
+  for (const [ph,cx,cz,w,d] of ZONES){
+    const shape = roundRect(w,d,0.5);
+    const rug = mesh(new THREE.ShapeGeometry(shape), mat(mix(PCOL[ph],'#E9E3D8',0.78)), {cast:false, recv:true});
+    rug.rotation.x = -Math.PI/2; rug.position.set(cx,0.012,cz); scene.add(rug);
+    const edge = mesh(new THREE.ShapeGeometry(roundRect(w,0.08,0.04)), mat(PCOL[ph]), {cast:false, recv:true});
+    edge.rotation.x=-Math.PI/2; edge.position.set(cx,0.014,cz-d/2+0.04); scene.add(edge);
+    const tag = new CSS2DObject(css('zone',`${ph} · ${PHASES[ph]}`)); tag.element.style.background = PCOL[ph];
+    tag.position.set(cx - w/2 + 1.0, 0.05, cz + (cz<0 ? d/2 - 0.1 : d/2 - 0.15)); scene.add(tag);
+  }
+  // bàn điều phối (hub) + bàn huddle
+  const base = cyl(0.75,0.85,0.7,'#CFD6DD',10); base.position.set(HUB.x,0.35,HUB.z+0.55); scene.add(base);
+  const ring = cyl(0.8,0.8,0.08,mat('#23A08F',{emissive:'#23A08F',emissiveIntensity:0.35}),16); ring.position.set(HUB.x,0.74,HUB.z+0.55); scene.add(ring);
+  const top = cyl(HUDDLE.r,HUDDLE.r,0.08,'#D9C3A0',14); top.position.set(HUDDLE.x,0.74,HUDDLE.z); scene.add(top);
+  const leg = cyl(0.12,0.3,0.72,'#A88E6A',8); leg.position.set(HUDDLE.x,0.36,HUDDLE.z); scene.add(leg);
+  const t2 = new CSS2DObject(css('zone obj','Huddle')); t2.position.set(HUDDLE.x,0.1,HUDDLE.z+1.45); scene.add(t2);
+  hubBubble = makeBubble(); hubBubble.obj.position.set(HUDDLE.x,1.5,HUDDLE.z); scene.add(hubBubble.obj);
+  // server rack cho SOC
+  const rack = box(0.7,1.5,0.6,'#3A4250'); rack.position.set(7.9,0.75,4.6); scene.add(rack);
+  for (let i=0;i<4;i++){const l=box(0.5,0.05,0.02,mat('#7CF0C8',{emissive:'#36d39a',emissiveIntensity:.6}),{cast:false});l.position.set(7.9,0.4+i*0.3,4.92);scene.add(l)}
+  for (const id in DESK) desk(id);
+}
+function roundRect(w,h,r){
+  const s=new THREE.Shape(),x=-w/2,y=-h/2;
+  s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);s.lineTo(x+w,y+h-r);s.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  s.lineTo(x+r,y+h);s.quadraticCurveTo(x,y+h,x,y+h-r);s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);return s;
+}
+function plant(x,z){
+  const pot = cyl(0.28,0.22,0.45,'#C8B79E',8); pot.position.set(x,0.22,z); scene.add(pot);
+  const leaves = mesh(new THREE.IcosahedronGeometry(0.48,0), mat('#6FA36B')); leaves.position.set(x,0.85,z); leaves.scale.y=1.25; scene.add(leaves);
+}
+function desk(id){
+  const [x,row] = DESK[id], z = ROW_Z[row].desk, ph = phaseOf(id);
+  const g = new THREE.Group(); g.position.set(x,0,z);
+  const top = box(1.5,0.08,0.78,'#DCC7A4'); top.position.y=0.74; top.receiveShadow=true; g.add(top);
+  for (const sx of [-0.66,0.66]){const l=box(0.07,0.7,0.66,'#B49B77');l.position.set(sx,0.35,0);g.add(l)}
+  const mon = box(0.52,0.32,0.04,'#2E3440'); mon.position.set(0.32,1.02,-0.12); mon.rotation.y=Math.PI*0.06; g.add(mon);
+  const scr = box(0.46,0.26,0.01,mat(mix(PCOL[ph],'#ffffff',0.55),{emissive:PCOL[ph],emissiveIntensity:0.12}),{cast:false}); scr.position.set(0.32,1.02,-0.095); scr.rotation.y=Math.PI*0.06; g.add(scr);
+  const st = box(0.05,0.14,0.05,'#2E3440'); st.position.set(0.32,0.84,-0.14); g.add(st);
+  const mug = cyl(0.05,0.05,0.1,PCOL[ph],8); mug.position.set(-0.5,0.83,0.15); g.add(mug);
+  const paper = box(0.28,0.01,0.2,'#ffffff',{cast:false}); paper.position.set(-0.15,0.785,0.12); paper.rotation.y=0.2; g.add(paper);
+  scene.add(g);
+}
+
+// ---------------- nhân vật (low-poly tự thiết kế) ----------------
+const SKIN = ['#F2D3B5','#E8BE98','#D9A77E','#C68C62','#F5DCC4'];
+const HAIR = ['#2F2A26','#4A3628','#7A5235','#1E2633','#9C6B3C','#555B66'];
+const hash = s => [...String(s)].reduce((h,c)=>(h*31+c.charCodeAt(0))>>>0, 7);
+
+function accessory(role, ph, R){  // R: {body, handR, handL, head, front}
+  const add=(o,p,x,y,z,rx=0,ry=0,rz=0)=>{o.position.set(x,y,z);o.rotation.set(rx,ry,rz);p.add(o);return o};
+  switch(role){
+    case 'dev': { const g=new THREE.Group(); add(box(0.46,0.03,0.32,'#2E3440'),g,0,0,0);
+      add(box(0.46,0.3,0.025,'#2E3440'),g,0,0.15,-0.15,-0.25);
+      add(box(0.42,0.26,0.01,mat('#9FD8FF',{emissive:'#5BB8F5',emissiveIntensity:.5}),{cast:false}),g,0,0.15,-0.135,-0.25);
+      add(g,R.body,0,0.86,0.36); break; }
+    case 'tester': { add(cyl(0.05,0.07,0.2,mat('#7BD389',{transparent:true,opacity:.85})),R.handR,0,-0.1,0.04);
+      add(cyl(0.025,0.025,0.08,'#E7ECEF'),R.handR,0,0.03,0.04); break; }
+    case 'qc': { const g=new THREE.Group(); add(mesh(new THREE.TorusGeometry(0.11,0.025,6,14),mat('#C9A227')),g,0,0.13,0);
+      add(mesh(new THREE.CircleGeometry(0.1,12),mat('#CDEBFF',{transparent:true,opacity:.6}),{cast:false}),g,0,0.13,0.002);
+      add(cyl(0.025,0.025,0.16,'#5A4632'),g,0,-0.02,0); add(g,R.handR,0.02,-0.06,0.08); break; }
+    case 'soc': { const s=cyl(0.26,0.26,0.05,'#8E7CC3',6); add(s,R.handL,-0.06,-0.05,0.12,Math.PI/2,0,0);
+      add(box(0.06,0.24,0.02,'#ffffff'),s,0,-0.03,0,Math.PI/2); add(box(0.18,0.06,0.02,'#ffffff'),s,0,-0.03,0.04,Math.PI/2); break; }
+    case 'pm': { const g=new THREE.Group(); add(box(0.52,0.38,0.03,'#ffffff'),g,0,0,0); add(box(0.56,0.42,0.02,'#5C6B7A'),g,0,0,-0.02);
+      [[-0.15,0.12,'#E08A3C'],[0,0.2,'#3B7DD8'],[0.15,0.28,'#23A08F']].forEach(([x,h,c])=>add(box(0.09,h,0.01,c,{cast:false}),g,x,-0.15+h/2,0.02));
+      add(g,R.body,0.0,0.95,0.36,-0.15); break; }
+    case 'ui': { const g=new THREE.Group(); add(cyl(0.022,0.03,0.3,'#B07A4A'),g,0,0,0); add(mesh(new THREE.ConeGeometry(0.04,0.1,6),mat('#E85D9A')),g,0,0.19,0);
+      add(g,R.handR,0,0.04,0.08,0.5); add(box(0.16,0.02,0.16,'#ffffff'),R.handL,0,-0.07,0.06);
+      [['#E85D9A',-0.04],['#3B7DD8',0.04]].forEach(([c,x])=>add(cyl(0.025,0.025,0.015,c,6,{cast:false}),R.handL,x,-0.055,0.06)); break; }
+    case 'ux': { const g=new THREE.Group(); add(box(0.3,0.4,0.02,'#2E3440'),g,0,0,0);
+      add(box(0.26,0.34,0.005,'#F7F9FB',{cast:false}),g,0,0,0.012);
+      [[0,0.11,0.2,0.05],[-0.05,0,0.1,0.1],[0.07,0,0.08,0.1],[0,-0.12,0.2,0.03]].forEach(([x,y,w,h])=>add(box(w,h,0.004,'#9AB6DE',{cast:false}),g,x,y,0.016));
+      add(g,R.body,0.12,0.95,0.36,-0.2); break; }
+    case 'ba': { const g=new THREE.Group(); add(box(0.32,0.42,0.02,'#B49B77'),g,0,0,0); add(box(0.12,0.04,0.03,'#8C8C8C'),g,0,0.2,0.01);
+      [[-0.07,0.08,'#FFE27A'],[0.07,0.08,'#9EE2C5'],[-0.07,-0.08,'#FFB4A2'],[0.07,-0.08,'#FFE27A']].forEach(([x,y,c])=>add(box(0.11,0.11,0.006,c,{cast:false}),g,x,y,0.014));
+      add(g,R.body,-0.08,0.92,0.36,-0.2); break; }
+    case 'tech_lead': { add(mesh(new THREE.SphereGeometry(0.29,10,6,0,Math.PI*2,0,Math.PI/2),mat('#F2C230')),R.head,0,0.06,0);
+      add(cyl(0.36,0.36,0.03,'#F2C230',12),R.head,0,0.07,0.04); add(cyl(0.05,0.05,0.4,'#3B7DD8',8),R.handR,0,-0.06,0.06,Math.PI/2.4); break; }
+    case 'bu': { const g=new THREE.Group(); add(box(0.36,0.26,0.1,'#7A5235'),g,0,0,0); add(mesh(new THREE.TorusGeometry(0.06,0.015,5,10,Math.PI),mat('#4A3628')),g,0,0.13,0);
+      add(box(0.36,0.02,0.105,'#C9A227',{cast:false}),g,0,0.04,0); add(g,R.handR,0,-0.2,0.02); break; }
+    case 'estimation': { const g=new THREE.Group(); add(box(0.22,0.3,0.04,'#5C6B7A'),g,0,0,0);
+      add(box(0.18,0.07,0.01,mat('#BFF0D0',{emissive:'#7FD6A0',emissiveIntensity:.4}),{cast:false}),g,0,0.09,0.022);
+      for(let i=0;i<3;i++)for(let j=0;j<3;j++)add(box(0.04,0.03,0.01,j===2&&i===2?'#E08A3C':'#E7ECEF',{cast:false}),g,-0.06+j*0.06,0.0-i*0.05,0.022);
+      add(g,R.handL,0,-0.05,0.1,-0.4); break; }
+    case 'proposal': { const g=new THREE.Group(); add(box(0.28,0.36,0.01,'#ffffff'),g,0,0,0);
+      [0.1,0.05,0,-0.05].forEach(y=>add(box(0.2,0.012,0.004,'#B5BEC8',{cast:false}),g,0,y,0.008)); add(box(0.04,0.08,0.012,'#C0392B',{cast:false}),g,0.08,-0.13,0.008);
+      add(g,R.handR,0,-0.02,0.1,-0.3); break; }
+    case 'cos': { add(mesh(new THREE.ConeGeometry(0.06,0.3,4),mat('#B8323A')),R.body,0,1.0,0.27,Math.PI,0,0);
+      add(mesh(new THREE.OctahedronGeometry(0.05,0),mat('#F2C230')),R.body,0.15,1.12,0.26); add(box(0.24,0.3,0.02,'#E7ECEF'),R.handL,0,-0.05,0.08,-0.3); break; }
+    case 'interviewer': { add(cyl(0.03,0.025,0.2,'#2E3440'),R.handR,0,0.03,0.06,0.3); add(mesh(new THREE.IcosahedronGeometry(0.06,1),mat('#5C6B7A')),R.handR,0,0.15,0.09); break; }
+    case 'dispatcher': { add(cyl(0.015,0.015,0.22,'#5C6B7A'),R.head,0,0.34,0);
+      add(mesh(new THREE.SphereGeometry(0.05,8,6),mat('#23A08F',{emissive:'#23A08F',emissiveIntensity:.8})),R.head,0,0.47,0);
+      add(box(0.36,0.1,0.06,mat('#9FE6DA',{emissive:'#23A08F',emissiveIntensity:.35})),R.head,0,0.02,0.22); add(box(0.24,0.32,0.02,'#E7ECEF'),R.handL,0,-0.05,0.08,-0.3); break; }
+  }
+}
+
+class Char {
+  constructor({id, role, phase, label, home, lane, exit, scale=(NARROW?1.45:1.15), child=false, agent=null, task=null, lift=0}){
+    Object.assign(this, {id, role, phase, home, lane, exit, child, agent, task});
+    this.status='idle'; this.busy=0; this.queue=Promise.resolve(); this.path=null; this.yaw=0; this.yawT=0;
+    this.t = Math.random()*10; this.scaleT = scale; this.alpha=1; this.inHuddle=false;
+    const col = PCOL[phase]||PCOL.O, h = hash(id);
+    const M = c => mat(c);
+    const root = this.root = new THREE.Group(); root.userData.char = this;
+    const body = this.body = new THREE.Group(); root.add(body);
+    const legC = M('#3A4250');
+    this.legs = [-0.12,0.12].map(x=>{const p=new THREE.Group();p.position.set(x,0.44,0);const l=mesh(new THREE.CylinderGeometry(0.085,0.075,0.44,6),legC);l.position.y=-0.22;p.add(l);
+      const shoe=mesh(new THREE.BoxGeometry(0.15,0.07,0.22),M('#2A2F38'));shoe.position.set(0,-0.43,0.03);p.add(shoe);body.add(p);return p});
+    const torso = mesh(new THREE.CapsuleGeometry(0.27,0.4,3,8), M(col)); torso.position.y=0.9; body.add(torso);
+    const belt = mesh(new THREE.CylinderGeometry(0.285,0.285,0.07,8), M(mix(col,'#1A2332',0.45))); belt.position.y=0.6; body.add(belt);
+    const armC = M(mix(col,'#ffffff',0.12)), skin = M(SKIN[h%SKIN.length]);
+    const mkArm = x => {const p=new THREE.Group();p.position.set(x,1.14,0);const a=mesh(new THREE.CapsuleGeometry(0.075,0.3,2,6),armC);a.position.y=-0.2;p.add(a);
+      const hand=new THREE.Group();hand.position.y=-0.42;p.add(hand);const hm=mesh(new THREE.SphereGeometry(0.075,8,6),skin);hand.add(hm);body.add(p);return [p,hand]};
+    const [aR,hR] = mkArm(-0.37), [aL,hL] = mkArm(0.37); this.arms=[aR,aL];
+    const head = this.head = new THREE.Group(); head.position.y=1.56; body.add(head);
+    head.add(mesh(new THREE.IcosahedronGeometry(0.26,1), skin));
+    if (role!=='tech_lead'){ const hair = mesh(new THREE.SphereGeometry(0.275,10,6,0,Math.PI*2,0,Math.PI/2.1), M(role==='dispatcher'?'#8C97A3':HAIR[h%HAIR.length]));
+      hair.rotation.x=-0.25; hair.position.set(0,0.03,-0.02); head.add(hair); }
+    const eyeM = M('#1A2332');
+    for (const x of [-0.085,0.085]){const e=mesh(new THREE.SphereGeometry(0.03,6,4),eyeM,{cast:false});e.position.set(x,0.02,0.235);head.add(e)}
+    const cheek = M('#F2A7A0'); for (const x of [-0.15,0.15]){const c=mesh(new THREE.SphereGeometry(0.035,6,4),cheek,{cast:false});c.position.set(x,-0.06,0.2);c.scale.z=0.4;head.add(c)}
+    accessory(role, phase, {body, handR:hR, handL:hL, head});
+    if (child) root.traverse(o=>{ if(o.isMesh){ o.material = o.material.clone(); o.material.transparent=true; } });
+    // nhãn + cảnh báo + bong bóng
+    this.lbl = css('lbl'+(child?' child':''), `<span class="d" style="background:${col}"></span>${esc(label)}<span class="st"></span>`);
+    this.lbl.addEventListener('click', e=>{e.stopPropagation(); focusAgent(this.agent||this.id)});
+    this.lblObj = label2d(this.lbl, 2.15 + (lift||0), root);
+    this.alertEl = css('alert','!'); this.alertObj = label2d(this.alertEl, 2.75, root);
+    this.bub = makeBubble(); this.bub.obj.position.y = 3.0; root.add(this.bub.obj);
+    root.position.set(home[0],0,home[1]); root.scale.setScalar(scale);
+    scene.add(root);
+  }
+  get pos(){return this.root.position}
+  setStatus(s){
+    this.status = s;
+    this.lbl.querySelector('.st').className = 'st '+s;
+    this.alertEl.className = 'alert' + (s==='blocked'?' show':s==='waiting_gate'?' show gate':'');
+    this.alertEl.textContent = s==='waiting_gate' ? '⏳' : '!';
+  }
+  walk(points){
+    if (!points.length) return Promise.resolve();
+    if (RM){ const p=points[points.length-1]; this.pos.set(p[0],0,p[1]); return sleep(250); }
+    return new Promise(res=>{ this.path = points.map(p=>p.slice()); this.onArrive = res; });
+  }
+  faceTo(x,z){ this.yawT = Math.atan2(x-this.pos.x, z-this.pos.z); }
+  faceFront(){ this.yawT = 0; }
+  say(text, type, ms=2600){ this.bub.say(text, type, ms); }
+  update(dt, now){
+    this.t += dt;
+    if (this.path){
+      const tgt = this.path[0], dx=tgt[0]-this.pos.x, dz=tgt[1]-this.pos.z, d=Math.hypot(dx,dz), step=3.0*dt;
+      if (d>0.001) this.yawT = Math.atan2(dx,dz);
+      if (step>=d){ this.pos.x=tgt[0]; this.pos.z=tgt[1]; this.path.shift();
+        if (!this.path.length){ this.path=null; const r=this.onArrive; this.onArrive=null; r&&r(); } }
+      else { this.pos.x += dx/d*step; this.pos.z += dz/d*step; }
+      const sw = Math.sin(this.t*11)*0.55;
+      this.legs[0].rotation.x = sw; this.legs[1].rotation.x = -sw;
+      this.arms[0].rotation.x = -sw*0.7; this.arms[1].rotation.x = sw*0.7;
+      this.body.position.y = Math.abs(Math.sin(this.t*11))*0.05;
+    } else {
+      this.legs[0].rotation.x *= 0.8; this.legs[1].rotation.x *= 0.8;
+      if (RM){ this.arms.forEach(a=>a.rotation.x*=0.8); this.body.position.y=0; }
+      else if (this.status==='working' && !this.away){
+        this.arms[0].rotation.x = -0.9 + Math.sin(this.t*16)*0.18; this.arms[1].rotation.x = -0.9 + Math.sin(this.t*16+1.7)*0.18;
+        this.body.position.y = 0; this.head.rotation.z = Math.sin(this.t*3)*0.05; this.body.rotation.z = Math.sin(this.t*2.2)*0.02;
+      } else {
+        this.arms.forEach((a,i)=>a.rotation.x = a.rotation.x*0.85 + (Math.sin(this.t*1.6+i)*0.05)*0.15);
+        this.body.position.y = (Math.sin(this.t*2.2)+1)*0.018; this.head.rotation.z *= 0.9; this.body.rotation.z *= 0.9;
+        if (this.status==='blocked') this.head.rotation.x = 0.12; else this.head.rotation.x *= 0.9;
+      }
+    }
+    let dy = this.yawT - this.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    this.yaw += dy * Math.min(1, dt*(RM?30:9)); this.root.rotation.y = this.yaw;
+    const s = this.root.scale.x, st = this.scaleT; if (Math.abs(s-st)>0.001) this.root.scale.setScalar(RM?st:s+(st-s)*Math.min(1,dt*7));
+  }
+  setAlpha(a){ this.alpha=a; this.root.traverse(o=>{ if(o.isMesh){ o.material.opacity=a; } });
+    for (const el of [this.lbl,this.alertEl]) el.style.opacity=a; }
+  dispose(){ scene.remove(this.root); for (const o of [this.lblObj,this.alertObj,this.bub.obj]) o.element.remove(); }
+}
+
+function makeBubble(){
+  const el = css('bub',''); const obj = new CSS2DObject(wrap(el)); let token=0;
+  return {obj, el, say(text, type, ms=2600){
+    const k = ++token; el.innerHTML = (type?`<span class="k" style="color:${TCOL[type]||'#1A2332'}">${esc(type)}</span>`:'') + esc(short(text, NARROW?60:90));
+    el.classList.add('show'); timer(ms).then(()=>{ if (k===token) el.classList.remove('show'); });
+  }};
+}
+const short = (s,n) => { s=String(s||''); return s.length>n ? s.slice(0,n-1)+'…' : s; };
+
+// ---------------- đồng hồ mô phỏng (pause + tốc độ) ----------------
+let simNow=0, speed=1, paused=false; const timers=[];
+function timer(ms){ return new Promise(r=>timers.push({at:simNow+ms, r})); }
+const sleep = timer;
+
+// ---------------- nhân vật trong phòng ----------------
+const chars = new Map();     // id → Char (agent chính + điều phối)
+const kids = new Map();      // task_id → Char (worker spawn)
+let hubBubble;
+function homeOf(id){ const [x,row]=DESK[id]; return [x, ROW_Z[row].home]; }
+function exitOf(id){ const [x,row]=DESK[id]; return row==='back' ? [[x+1.0,ROW_Z.back.home],[x+1.0,LANE.back]] : [[x,LANE.front]]; }
+function makeAgents(list){
+  for (const a of list){
+    if (chars.has(a.id) || !DESK[a.id]) continue;
+    const [x,row]=DESK[a.id];
+    chars.set(a.id, new Char({id:a.id, role:a.role||'', phase:a.phase||phaseOf(a.id), label:NARROW?nameOf(a.id).split(' ')[0]:nameOf(a.id), home:homeOf(a.id), lane:row, exit:exitOf(a.id),
+      lift: (!NARROW && Object.keys(DESK).filter(k=>DESK[k][1]===row && phaseOf(k)===phaseOf(a.id)).indexOf(a.id)%2) ? 0.95 : 0}));
+  }
+  if (!chars.has(DISPATCHER)) chars.set(DISPATCHER, new Char({id:DISPATCHER, role:'dispatcher', phase:'O', label:'Điều phối',
+    home:[HUB.x,HUB.z-0.35], lane:'back', exit:[[HUB.x,LANE.back]]}));
+}
+function crossX(a,b){ let x=(a+b)/2; for (const [l,r] of FORBID) if (x>l && x<r) x = (x-l < r-x) ? l : r; return x; }
+// đường đi: rời bàn → lối đi → (đổi lối ở chỗ trống) → điểm tiếp cận đích. Về = đảo ngược.
+function route(c, dst){
+  const pts = [...c.exit]; const s = pts[pts.length-1];
+  const dl = dst.lane || c.lane, dz = LANE[dl];
+  if (dl !== c.lane){ const xc = crossX(s[0], dst.x); pts.push([xc, LANE[c.lane]], [xc, dz]); }
+  pts.push([dst.x, dz], ...dst.approach);
+  return pts;
+}
+const visitors = new Map();
+function approachFor(c, toId){
+  if (toId==='huddle'){ const used=new Set([...chars.values(),...kids.values()].filter(o=>o.inHuddle).map(o=>o.seat));
+    let i=0; while(used.has(i)&&i<SEATS.length-1) i++; c.seat=i; const [x,z]=SEATS[i];
+    return {x, lane: z<HUDDLE.z ? 'back' : (c.lane), approach:[[x,z]], face:[HUDDLE.x,HUDDLE.z]}; }
+  const t = chars.get(ALIAS[toId]||toId) || null;
+  if (!t || t===c) return null;
+  const n = visitors.get(t.id)||0; visitors.set(t.id, n+1); const off = n*0.6;
+  if (t.id===DISPATCHER) { const x=HUB.x+1.05+off; return {x, lane:'back', approach:[[x,HUB.z-0.35]], face:[t.home[0],t.home[1]], target:t}; }
+  const [x,row]=DESK[t.id];
+  if (row==='back') return {x:x+off, lane:'back', approach:[[x+off,ROW_Z.back.desk+0.85]], face:[x,ROW_Z.back.home], target:t};
+  return {x:x+1.05+off, lane:'front', approach:[[x+1.05+off,ROW_Z.front.home]], face:[x,ROW_Z.front.home], target:t};
+}
+function actorFor(id, task){
+  id = ALIAS[id]||id;
+  if (task && kids.has(task) && (!id || id===kids.get(task).agent)) return kids.get(task);
+  return chars.get(id) || null;
+}
+function enqueue(c, fn){ c.busy++; c.queue = c.queue.then(fn).catch(e=>console.warn(e)).finally(()=>{ c.busy--; }); return c.queue; }
+
+function visit(c, ev){
+  return enqueue(c, async ()=>{
+    if (c.inHuddle && ev.to!=='huddle') await leaveHuddle(c);
+    const dst = approachFor(c, ev.to);
+    if (!dst){ c.say(ev.summary, ev.type); markLive(ev, 2600); await sleep(2600); return; }
+    if (ev.to==='huddle' && c.inHuddle){ c.say(ev.summary, ev.type, 3000); markLive(ev, 3000); await sleep(1800); return; }
+    const path = route(c, dst); c.away = true;
+    await c.walk(path);
+    c.faceTo(...dst.face);
+    if (dst.target && !dst.target.path){ dst.target.faceTo(c.pos.x, c.pos.z); }
+    c.say(ev.summary, ev.type, 2600); markLive(ev, 2600);
+    await sleep(2400);
+    if (ev.to==='huddle'){ c.inHuddle = true; c.huddlePath = path; c.huddleSince = simNow; return; }
+    if (dst.target){ visitors.set(dst.target.id, Math.max(0,(visitors.get(dst.target.id)||1)-1)); if (!dst.target.path && !dst.target.away) dst.target.faceFront(); }
+    await c.walk(path.slice(0,-1).reverse().concat([c.home]));
+    c.faceFront(); c.away = false;
+  });
+}
+async function leaveHuddle(c){
+  if (!c.inHuddle) return; c.inHuddle=false;
+  await c.walk(c.huddlePath.slice(0,-1).reverse().concat([c.home])); c.faceFront(); c.away=false;
+}
+function releaseHuddle(){ for (const c of [...chars.values(), ...kids.values()]) if (c.inHuddle) enqueue(c, ()=>leaveHuddle(c)); }
+
+function spawnKid(task, agent, parentId, animate=true){
+  if (kids.has(task)){ const k=kids.get(task); k.setStatus('working'); if (k.fading){k.fading=false;k.setAlpha(1);} return k; }
+  const used = new Set([...kids.values()].map(k=>k.slot));
+  let slot = 0; while (used.has(slot) && slot < CHILD_SLOTS.length-1) slot++;
+  const [x,z] = CHILD_SLOTS[slot];
+  const base = chars.get(agent) || chars.get('c1_dev');
+  const k = new Char({id:'kid:'+task, role:base?base.role:'dev', phase:base?base.phase:'C', label:`${nameOf(agent).split(' ')[0]}·${task}`,
+    home:[x,z], lane:'front', exit:[[x,LANE.front]], lift: slot%2 ? 0.8 : 0, scale: animate&&!RM ? 0.01 : 0.9, child:true, agent, task});
+  k.scaleT = 0.9; k.slot = slot; k.setStatus('working'); kids.set(task, k);
+  if (animate && !RM) pop(x,z, PCOL[k.phase]);
+  return k;
+}
+function killKid(task){
+  const k = kids.get(task); if (!k || k.fading) return;
+  k.fading = true; kids.delete(task);
+  enqueue(k, async ()=>{
+    for (let i=1;i<=12;i++){ k.setAlpha(1-i/12); if(!RM) k.scaleT = 0.9*(1-i/30); await sleep(RM?10:60); }
+    k.dispose(); renderAgents();
+  });
+}
+const rings=[];
+function pop(x,z,color){
+  const r = mesh(new THREE.RingGeometry(0.3,0.42,24), new THREE.MeshBasicMaterial({color, transparent:true, opacity:.8, side:THREE.DoubleSide}), {cast:false});
+  r.rotation.x=-Math.PI/2; r.position.set(x,0.03,z); scene.add(r); rings.push({r, t:0});
+}
+
+// ---------------- phát event ----------------
+function playEvent(ev){
+  addLog(ev, true);
+  const T = ev.type;
+  if (T==='GATE'){ return; }
+  if (T==='SPAWN' && ev.task_id){
+    const agent = ev.agent || ev.to || 'c1_dev';
+    const disp = actorFor(ev.from); disp && disp.say(ev.summary, T, 1800);
+    spawnKid(ev.task_id, agent, ev.from, true).say(ev.summary, T, 2000); markLive(ev, 2000); return;
+  }
+  if (T==='KILL' && ev.task_id){
+    const k = kids.get(ev.task_id); if (k){ k.say(ev.summary, T, 1200); } else { const a=actorFor(ev.from); a&&a.say(ev.summary,T); }
+    markLive(ev, 1500); timer(900).then(()=>killKid(ev.task_id)); return;
+  }
+  if (T==='DECISION' && ev.from==='huddle'){
+    hubBubble.say(ev.summary, T, 3200); markLive(ev, 3200); timer(1400).then(releaseHuddle); return;
+  }
+  const actor = actorFor(ev.from, ev.task_id);
+  if (T==='BLOCKED'){
+    const a = actor || (ev.task_id && kids.get(ev.task_id));
+    if (a){ a.setStatus('blocked'); a.say(ev.summary, T, 3000); }
+    markLive(ev, 3000); return;
+  }
+  if (!actor){ markLive(ev, 1500); return; }
+  if (ev.to && (ALIAS[ev.to]||ev.to) !== actor.id) visit(actor, ev);
+  else { actor.say(ev.summary, T); markLive(ev, 2600); }
+}
+
+// ---------------- panel ----------------
+const logEl = document.getElementById('log'), LOG_MAX = 150;
+let logItems = [], filterId = null, logSeq = 0;
+function evTime(ev){
+  const d = ev.ts ? new Date(ev.ts*1000) : null;
+  return d && !isNaN(d) ? d.toTimeString().slice(0,8) : '';
+}
+function relates(ev, id){ if (!id) return true; return ev.from===id || ev.to===id || ev.agent===id || (ALIAS[ev.from]===id) || (ALIAS[ev.to]===id); }
+function msgHTML(ev){
+  const to = ev.to ? ` → <b>${esc(nameOf(ALIAS[ev.to]||ev.to))}</b>` : '';
+  return `<span class="ty" style="background:${TCOL[ev.type]||'#5C6B7A'}">${esc(ev.type)}</span><div style="min-width:0">
+    <div class="rt"><b>${esc(nameOf(ALIAS[ev.from]||ev.from))}</b>${to}${ev.task_id?` · ${esc(ev.task_id)}`:''}<span class="tm">${esc(evTime(ev))}</span></div>
+    <div class="sm">${esc(ev.summary)}</div></div>`;
+}
+function addLog(ev, fresh){
+  ev._k = ev._k || ('m'+(++logSeq));
+  logItems.push(ev); if (logItems.length > LOG_MAX) logItems.shift();
+  if (!relates(ev, filterId)) { updCounts(); return; }
+  const d = document.createElement('div'); d.className='msg'+(fresh?' new':''); d.dataset.k=ev._k; d.innerHTML=msgHTML(ev);
+  logEl.querySelector('.empty')?.remove();
+  logEl.prepend(d); while (logEl.children.length > LOG_MAX) logEl.lastChild.remove();
+  updCounts();
+}
+function renderLog(){
+  const items = logItems.filter(e=>relates(e, filterId)).slice().reverse();
+  logEl.innerHTML = items.length ? items.map(e=>`<div class="msg" data-k="${e._k}">${msgHTML(e)}</div>`).join('')
+    : `<div class="empty">${MODE==='live' ? 'Chưa có trao đổi trên Blackboard. Mở <a href="?demo=1">?demo=1</a> để xem kịch bản mẫu.' : 'Đang chờ trao đổi…'}</div>`;
+  updCounts();
+}
+function markLive(ev, ms){
+  const el = ev._k && logEl.querySelector(`[data-k="${ev._k}"]`); if (!el) return;
+  el.classList.add('live'); timer(ms).then(()=>el.classList.remove('live'));
+  if (ev.task_id) document.querySelector(`.task[data-id="${CSS.escape(ev.task_id)}"]`)?.classList.add('flash');
+}
+function updCounts(){ document.getElementById('nLog').textContent = `(${logItems.length})`; }
+
+let STATE = {agents: FALLBACK_AGENTS.map(a=>({...a})), tasks: [], gate: null};
+function renderTasks(){
+  const ts = STATE.tasks.filter(t=>!filterId || t.owner_agent===filterId || (filterId==='c1_dev' && kids.has(t.id)));
+  document.getElementById('nTask').textContent = `(${STATE.tasks.length})`;
+  const cnt = {}; STATE.tasks.forEach(t=>cnt[t.status]=(cnt[t.status]||0)+1);
+  document.getElementById('tcounts').innerHTML = TASK_ST.filter(s=>cnt[s]).map(s=>`<span class="chip c-${s}" title="${TASK_VI[s]}">${s} · ${cnt[s]}</span>`).join('');
+  document.getElementById('tasks').innerHTML = ts.length ? ts.map(t=>`<div class="task" data-id="${esc(t.id)}">
+    <span class="id">${esc(t.id)}</span><span class="tt" title="${esc(t.title)}">${esc(t.title||'—')}</span>
+    <span class="chip c-${esc(t.status)}" title="${esc(TASK_VI[t.status]||t.status)}">${esc(t.status)}</span>
+    <span class="meta">${t.owner_agent?`👤 ${esc(nameOf(t.owner_agent))}`:'chưa giao'}${t.deps&&t.deps.length?` · deps ${esc(t.deps.join(', '))}`:''}${t.owns&&t.owns.length?` · owns ${esc(t.owns.join(', '))}`:''}${t.risk_level?` · risk ${esc(t.risk_level)}`:''}</span></div>`).join('')
+    : `<div class="empty">${filterId?'Không có task của agent này.':'Chưa có task — B4 Tech Lead chưa chia backlog.'}</div>`;
+}
+function renderAgents(){
+  const el = document.getElementById('agents'); const list = STATE.agents;
+  document.getElementById('nAgent').textContent = `(${list.length} · ${list.filter(a=>a.status==='working').length} đang làm)`;
+  el.innerHTML = list.map(a=>{
+    const workers = [...kids.values()].filter(k=>k.agent===a.id).map(k=>k.task);
+    return `<div class="ag${filterId===a.id?' sel':''}" data-id="${esc(a.id)}"><span class="d" style="background:${PCOL[a.phase]||PCOL.E}"></span>
+    <span class="nm">${esc(nameOf(a.id))}<small>${esc(a.phase)} · ${esc(PHASES[a.phase]||'')}</small>${a.level?`<span class="lv">${esc(a.level)}</span>`:''}</span>
+    <span class="chip s-${esc(a.status)}">${esc(ST_VI[a.status]||a.status)}</span>
+    ${a.current_task||workers.length?`<span class="meta">${a.current_task?`task hiện tại: <b>${esc(a.current_task)}</b>`:''}${workers.length?`${a.current_task?' · ':''}worker: ${esc(workers.join(', '))}`:''}</span>`:''}</div>`;}).join('');
+  el.querySelectorAll('.ag').forEach(r=>r.onclick=()=>focusAgent(r.dataset.id));
+  for (const c of chars.values()) c.lbl.classList.toggle('sel', c.id===filterId);
+}
+function applyState(){
+  for (const a of STATE.agents){ const c = chars.get(a.id); if (c) c.setStatus(a.status); }
+  const gate = STATE.gate, gb = document.getElementById('gatebar');
+  gb.classList.toggle('show', !!gate); if (gate) gb.textContent = `⏳ ${gate.id} · chờ người duyệt${gate.who?` (${gate.who})`:''} — người ký trên Dashboard hoặc terminal của mình`;
+  // worker theo trạng thái task: blocked → "!", xong (await_merge/ready/merged) → rời phòng
+  const byId = Object.fromEntries(STATE.tasks.map(t=>[t.id,t]));
+  for (const [tid,k] of kids){ const t = byId[tid]; if (!t) continue;
+    if (t.status==='blocked') k.setStatus('blocked'); else if (['in_dev','testing','qc'].includes(t.status)) k.setStatus('working');
+    else k.queue.then(()=>timer(1500)).then(()=>{ const t2=(STATE.tasks.find(x=>x.id===tid)||{}); if(!['in_dev','testing','qc','blocked'].includes(t2.status)) killKid(tid); }); }
+  renderTasks(); renderAgents();
+}
+function setFilter(id){
+  filterId = id; const f = document.getElementById('filter');
+  f.classList.toggle('show', !!id); document.getElementById('filterTxt').textContent = id ? `Đang lọc theo: ${nameOf(id)}` : '';
+  renderLog(); renderTasks(); renderAgents();
+}
+document.getElementById('clearF').onclick = ()=>{ setFilter(null); flyTo(VIEW_TARGET, defaultDist()); };
+
+// ---------------- camera ----------------
+let fly = null;
+function defaultDist(){   // tìm khoảng cách nhỏ nhất để cả phòng lọt khung (chừa chỗ HUD trên + legend dưới)
+  const cam = camera.clone(); let lo = 5, hi = 120;
+  for (let i=0;i<24;i++){
+    const d = (lo+hi)/2; cam.position.copy(VIEW_TARGET).addScaledVector(VIEW_DIR, d); cam.lookAt(VIEW_TARGET); cam.updateMatrixWorld();
+    const ok = ROOM_CORNERS.every(c=>{ const p=c.clone().project(cam); return Math.abs(p.x)<=(NARROW?1.0:1.06) && p.y<=(NARROW?0.86:0.80) && p.y>=(NARROW?-0.80:-0.88) && p.z<1; });
+    if (ok) hi = d; else lo = d;
+  }
+  return hi;
+}
+function flyTo(target, dist){
+  const to = target.clone().add(VIEW_DIR.clone().multiplyScalar(dist));
+  if (RM){ controls.target.copy(target); camera.position.copy(to); return; }
+  fly = {t:0, ft:controls.target.clone(), fp:camera.position.clone(), tt:target.clone(), tp:to};
+}
+function focusAgent(id){
+  const c = chars.get(id) || [...kids.values()].find(k=>k.agent===id);
+  if (filterId===id){ setFilter(null); flyTo(VIEW_TARGET, defaultDist()); return; }
+  setFilter(id);
+  if (c) flyTo(new THREE.Vector3(c.pos.x, 0.9, c.pos.z), Math.min(14, defaultDist()*0.5));
+  if (NARROW) document.getElementById('stage').scrollIntoView({behavior: RM?'auto':'smooth'});
+}
+document.getElementById('home').onclick = ()=>flyTo(VIEW_TARGET, defaultDist());
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(); let down=null;
+renderer.domElement.addEventListener('pointerdown', e=>{ down=[e.clientX,e.clientY]; });
+renderer.domElement.addEventListener('pointerup', e=>{
+  if (!down || Math.hypot(e.clientX-down[0], e.clientY-down[1])>6) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.set(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(ptr, camera);
+  const roots = [...chars.values(), ...kids.values()].map(c=>c.root);
+  const hit = ray.intersectObjects(roots, true)[0];
+  if (hit){ let o=hit.object; while(o && !o.userData.char) o=o.parent; if (o){ const c=o.userData.char; focusAgent(c.agent||c.id); } }
+});
+
+// ---------------- điều khiển ----------------
+const pauseBtn = document.getElementById('pause');
+pauseBtn.onclick = ()=>{ paused=!paused; pauseBtn.textContent = paused?'▶':'❚❚'; pauseBtn.classList.toggle('on', paused); };
+document.querySelectorAll('[data-sp]').forEach(b=>b.onclick=()=>{ speed=+b.dataset.sp;
+  document.querySelectorAll('[data-sp]').forEach(x=>x.classList.toggle('on', x===b)); });
+document.getElementById('legend').innerHTML = Object.entries(PHASES).map(([k,v])=>`<span><i style="background:${PCOL[k]}"></i>${k} ${v}</span>`).join('')
+  + Object.entries({working:'#15803D',blocked:'#C0392B',waiting_gate:'#B5720E'}).map(([k,c])=>`<span><i style="background:${c}"></i>${ST_VI[k]}</span>`).join('');
+
+// ---------------- vòng render ----------------
+function resize(){
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h); labelR.setSize(w, h); camera.aspect = w/h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(()=>{ const first = !camera.userData.ready; resize();
+  if (first){ camera.userData.ready = true; controls.target.copy(VIEW_TARGET); camera.position.copy(VIEW_TARGET.clone().add(VIEW_DIR.clone().multiplyScalar(defaultDist()))); }
+}).observe(stage);
+const clock = new THREE.Clock();
+function frame(){
+  const rdt = Math.min(clock.getDelta(), 0.05), dt = paused ? 0 : rdt*speed;
+  simNow += dt*1000;
+  for (let i=timers.length-1;i>=0;i--) if (timers[i].at <= simNow){ const t=timers.splice(i,1)[0]; t.r(); }
+  for (const c of chars.values()) c.update(dt, simNow);
+  for (const k of kids.values()) k.update(dt, simNow);
+  for (let i=rings.length-1;i>=0;i--){ const g=rings[i]; g.t+=dt; g.r.scale.setScalar(1+g.t*3); g.r.material.opacity=Math.max(0,.8-g.t*1.2);
+    if (g.t>0.7){ scene.remove(g.r); g.r.geometry.dispose(); g.r.material.dispose(); rings.splice(i,1); } }
+  if (fly){ fly.t = Math.min(1, fly.t + rdt/0.7); const e = 1-Math.pow(1-fly.t,3);
+    controls.target.lerpVectors(fly.ft, fly.tt, e); camera.position.lerpVectors(fly.fp, fly.tp, e); if (fly.t>=1) fly=null; }
+  controls.update();
+  renderer.render(scene, camera); labelR.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+// ---------------- DEMO: kịch bản mẫu chạy lặp ----------------
+const D = DISPATCHER;
+const ev = (type, from, to, summary, extra={}) => ({type, from, to, summary, ...extra});
+const BACKLOG = [
+  ['T1','eKYC onboarding 4 bước + OCR',[],['src/kyc/'],'high'],['T2','Chuyển tiền quốc tế qua cổng FX',[],['src/remit/'],'high'],
+  ['T3','Dashboard đối soát admin',[],['src/admin/'],'normal'],['T4','Hạn mức giao dịch theo cấp KYC',['T1'],['src/limits/'],'normal'],
+  ['T5','Thông báo đẩy giao dịch',['T2','T3'],['src/notif/'],'low']];
+function demoScript(){
+  const S=[]; const st=(agents,tasks)=>({agents,tasks});
+  const step=(e,set={},wait=1500,extra={})=>S.push({ev:e,set,wait,...extra});
+  const asg=(t,n='')=>{ step(ev('ASSIGN',D,'c1_dev',`giao ${t} cho c1_dev${n}`,{task_id:t,agent:'c1_dev'}),{agents:{c1_dev:'working'}},1100);
+    step(ev('SPAWN',D,'c1_dev',`spawn ${t} (${n?'retry':'ready'}) · lần ${n?2:1}`,{task_id:t,agent:'c1_dev',parent:D}),{tasks:{[t]:{status:'in_dev',owner_agent:'c1_dev'}}},1500); };
+  const flow=(t, ok=true, why='')=>{
+    step(ev('RESULT','c1_dev','c2_tester',`${t}: PR sẵn sàng → chuyển test`,{task_id:t,agent:'c1_dev'}),{agents:{c2_tester:'working'},tasks:{[t]:{status:'testing',owner_agent:'c2_tester'}}},2300);
+    step(ev('RESULT','c2_tester','c3_qc',`${t}: ${ok?'toàn bộ test pass':'11/12 test pass'}`,{task_id:t}),{agents:{c3_qc:'working'},tasks:{[t]:{status:'qc',owner_agent:'c3_qc'}}},2300);
+    step(ev('RESULT','c3_qc',D, ok?`${t}: OK · 0 Critical`:`${t}: FAIL — ${why}`,{task_id:t}),{tasks:{[t]:{status:ok?'await_merge':'qc',owner_agent:ok?null:'c3_qc'}}},2300);
+  };
+  step(ev('ASSIGN','e2_cos','a1_bu','giao brief NeoPay (ví điện tử, SG) cho A1'),{agents:{e2_cos:'working'}},800);
+  step(ev('RESULT','a1_bu','a2_estimation','business_context: 4 module · 2 điểm mơ hồ ghi ASSUMPTION'),{agents:{e2_cos:'idle',a1_bu:'working'}},2600);
+  step(ev('RESULT','a2_estimation','a3_proposal','estimate: 4 hạng mục WBS, size S–XL, khoảng 38–52 MM'),{agents:{a1_bu:'idle',a2_estimation:'working'}},3000);
+  step(ev('RESULT','a3_proposal','e1_pm','proposal bản cuối (Opus review) → chờ G1'),{agents:{a2_estimation:'idle',a3_proposal:'working'}},3000);
+  step(ev('GATE','human',null,'G1 · chờ Sales Lead duyệt proposal'),{agents:{a3_proposal:'idle',a1_bu:'waiting_gate',a2_estimation:'waiting_gate',a3_proposal:'waiting_gate'}},3000,{gate:{id:'G1',who:'Sales Lead'}});
+  step(ev('DECISION','e1_pm','b1_ba','G1 đã ký (Sales Lead) → mở Discovery'),{agents:{a1_bu:'idle',a2_estimation:'idle',a3_proposal:'idle'}},2600,{gate:null});
+  step(ev('RESULT','b1_ba','huddle','huddle vòng 1 · proposer: eKYC qua đối tác, 7 bước'),{agents:{b1_ba:'working'}},2600);
+  step(ev('RESULT','b2_ux','huddle','huddle vòng 1 · critic: 7 bước quá dài, dễ rớt ở selfie'),{agents:{b2_ux:'working'}},2200);
+  step(ev('RESULT','b1_ba','huddle','huddle vòng 2 · proposer: gộp còn 4 bước, OCR tự điền'),{},3600);
+  step(ev('RESULT','b2_ux','huddle','huddle vòng 2 · critic: đồng ý, thêm state lỗi OCR'),{},2600);
+  step(ev('DECISION','huddle',null,'Flow KYC? → 4 bước + OCR · 1 câu hỏi mở'),{},2600);
+  step(ev('RESULT','b1_ba','b2_ux','requirements: 12 story, AC Given/When/Then'),{},3400);
+  step(ev('RESULT','b2_ux','b3_ui','design_spec: 9 màn, 4 state mỗi màn'),{agents:{b1_ba:'idle'}},3000);
+  step(ev('RESULT','b3_ui','b4_tech_lead','ui_system: token màu + 14 component'),{agents:{b2_ux:'idle',b3_ui:'working'}},3000);
+  step(ev('RESULT','b4_tech_lead',D,'task_backlog: 5 task · DAG không vòng · owns tách biệt'),{agents:{b3_ui:'idle',b4_tech_lead:'working'},
+    tasks:Object.fromEntries(BACKLOG.map(([id,title,deps,owns,risk])=>[id,{id,title,deps,owns,risk_level:risk,status:'ready',owner_agent:null}]))},3200);
+  step(ev('GATE','human',null,'G2 · chờ Client + PM duyệt scope'),{agents:{b4_tech_lead:'waiting_gate',b1_ba:'waiting_gate',b2_ux:'waiting_gate',b3_ui:'waiting_gate'}},3000,{gate:{id:'G2',who:'Client + PM'}});
+  step(ev('DECISION','e1_pm',D,'G2 đã ký (Client + PM) → mở Build'),{agents:{b4_tech_lead:'idle',b1_ba:'idle',b2_ux:'idle',b3_ui:'idle'}},2600,{gate:null});
+  asg('T1'); asg('T2'); asg('T3');
+  flow('T1');
+  step(ev('BLOCKED','c1_dev',null,'T3: sandbox FX của đối tác chưa cấp',{task_id:'T3'}),{tasks:{T3:{status:'blocked',owner_agent:'c1_dev'}}},1200);
+  step(ev('RESULT','d1_soc','b4_tech_lead','quét SAST T1: 0 High/Critical'),{agents:{d1_soc:'working'}},2000);
+  flow('T2', false, '1 Critical: thiếu kiểm hạn mức');
+  step(ev('KILL',D,'c1_dev','T2: đóng worker lần 1',{task_id:'T2'}),{agents:{d1_soc:'idle'},tasks:{T2:{status:'ready',owner_agent:null}}},2200);
+  asg('T2',' (lần 2)');
+  step(ev('DECISION','e1_pm',D,'sandbox FX đã cấp → mở lại T3'),{},1600);
+  step(ev('KILL',D,'c1_dev','T3: đóng worker bị chặn',{task_id:'T3'}),{tasks:{T3:{status:'ready',owner_agent:null}}},2400);
+  asg('T3',' (lần 2)'); asg('T4');
+  flow('T2'); flow('T3'); flow('T4');
+  asg('T5'); flow('T5');
+  step(ev('RESULT',D,'b4_tech_lead','5/5 task await_merge → chờ G3'),{agents:{c1_dev:'idle',c2_tester:'idle',c3_qc:'idle'}},2600);
+  step(ev('GATE','human',null,'G3 · chờ Tech Lead duyệt merge (không auto-merge)'),
+    {agents:{b4_tech_lead:'waiting_gate',c1_dev:'waiting_gate',c2_tester:'waiting_gate',c3_qc:'waiting_gate'}},3000,{gate:{id:'G3',who:'Tech Lead'}});
+  S.push({ev:null, set:{}, wait:8000});
+  return S;
+}
+function demoApply(step){
+  const s = step.set||{};
+  for (const [id,v] of Object.entries(s.agents||{})){ const a = STATE.agents.find(x=>x.id===id); if (a) a.status = v; }
+  for (const [id,v] of Object.entries(s.tasks||{})){ const t = STATE.tasks.find(x=>x.id===id); if (t) Object.assign(t, v); else STATE.tasks.push({id,deps:[],owns:[],...v}); }
+  if ('gate' in step) STATE.gate = step.gate;
+  // task hiện tại của agent = task đang ở trong tay họ
+  const explicit = s.agents||{};
+  for (const a of STATE.agents){ const mine = STATE.tasks.filter(t=>t.owner_agent===a.id && ['in_dev','testing','qc','blocked'].includes(t.status));
+    a.current_task = (mine.find(t=>t.status!=='blocked')||mine[0]||{}).id || null;
+    if (!['c1_dev','c2_tester','c3_qc'].includes(a.id) || explicit[a.id]==='waiting_gate' || !STATE.tasks.length) continue;
+    a.status = mine.some(t=>t.status==='blocked') ? 'blocked' : mine.length ? 'working' : (explicit[a.id] || 'idle'); }
+  applyState();
+}
+async function runDemo(){
+  const levels = {c1_dev:'L1',c2_tester:'L1',c3_qc:'L0',b1_ba:'L1'};
+  for (;;){
+    STATE = {agents: FALLBACK_AGENTS.map(a=>({...a, level: levels[a.id]||'L0'})), tasks: [], gate: null};
+    for (const t of [...kids.keys()]) killKid(t);
+    for (const c of chars.values()){ c.inHuddle=false; }
+    logItems = []; renderLog(); applyState(); demoUsageReset();
+    for (const s of demoScript()){
+      demoApply(s);
+      if (s.ev){ playEvent({...s.ev, ts: Date.now()/1000}); if (['RESULT','DECISION'].includes(s.ev.type)) demoBurn(s.ev.from); }
+      await sleep(s.wait);
+    }
+    await sleep(500);
+  }
+}
+
+// ---------------- token đã đốt (góc phải trên canvas) ----------------
+const usageEl = document.getElementById('usage');
+let USAGE = null, PRICING = null;
+const fmtTok = n => { n = +n||0; return n>=1e6 ? (n/1e6).toFixed(n>=1e7?0:1)+'M' : n>=1e3 ? (n/1e3).toFixed(n>=1e5?0:1)+'k' : String(n); };
+const fmtUsd = v => v==null ? '$—' : '$' + (v>=100 ? v.toFixed(0) : v>=1 ? v.toFixed(2) : v.toFixed(3));
+const agentLabel = id => { const m = /^huddle:(.+)$/.exec(id||''); return m ? `Huddle · ${nameOf(m[1])}` : nameOf(id); };
+function setUsage(u){
+  if (!u) return;
+  const prev = USAGE ? USAGE.total : null; USAGE = u;
+  document.getElementById('uTot').textContent = fmtTok(u.total);
+  document.getElementById('uCost').textContent = fmtUsd(u.est_cost_usd);
+  usageEl.title = `Token đã đốt: ${(+u.total||0).toLocaleString()} (in ${(+u.tokens_in||0).toLocaleString()} · out ${(+u.tokens_out||0).toLocaleString()}) · ${u.calls||0} lần gọi · chi phí ƯỚC TÍNH theo config/pricing.yaml — bấm xem top agent`;
+  const bar = document.getElementById('uBar'), pct = document.getElementById('uPct'), b = u.budget;
+  bar.classList.toggle('show', !!b); pct.classList.toggle('show', !!b);
+  if (b){ const r = +b.ratio||0, w = +b.warn_at_ratio||0.8;
+    bar.querySelector('i').style.width = Math.min(100, r*100).toFixed(1)+'%';
+    bar.classList.toggle('warn', r>=w && r<1); bar.classList.toggle('over', r>=1);
+    pct.textContent = `${(r*100).toFixed(0)}% budget (${fmtTok(b.used)}/${fmtTok(b.limit)})`; }
+  const top = Object.entries(u.by_agent||{}).sort((a,b)=>b[1]-a[1]), mx = top.length ? top[0][1] : 1;
+  document.getElementById('uList').innerHTML = (top.length ? top.map(([id,n])=>`<div class="ur"><b>${esc(agentLabel(id))}</b><span>${fmtTok(n)}</span><i style="width:${(n/mx*100).toFixed(0)}%"></i></div>`).join('')
+    : '<div class="usub">Chưa có lần gọi model.</div>')
+    + `<div class="usub">${Object.entries(u.by_tier||{}).map(([t,v])=>`${esc(t)} ${fmtTok(v.total)}`).join(' · ')}${u.calls?` · ${u.calls} lần gọi`:''}</div>`;
+  if (prev!=null && u.total>prev){ usageEl.classList.remove('up'); void usageEl.offsetWidth; usageEl.classList.add('up');
+    clearTimeout(setUsage._t); setUsage._t = setTimeout(()=>usageEl.classList.remove('up'), 1200); }
+}
+function toggleUsage(){ const o = usageEl.classList.toggle('open'); usageEl.setAttribute('aria-expanded', o); }
+usageEl.onclick = toggleUsage; usageEl.onkeydown = e=>{ if (e.key==='Enter'||e.key===' '){ e.preventDefault(); toggleUsage(); } };
+// Demo: token giả lập theo kịch bản; chi phí chỉ khi đọc được đơn giá từ server (/api/projects → pricing).
+const DEMO_TIER = {a1_bu:'sonnet',a2_estimation:'sonnet',a3_proposal:'opus',b1_ba:'sonnet',b2_ux:'sonnet',b3_ui:'sonnet',b4_tech_lead:'opus',
+  c1_dev:'opus',c2_tester:'sonnet',c3_qc:'opus',d1_soc:'haiku',e1_pm:'haiku',e2_cos:'haiku'};
+let demoU = null;
+function demoUsageReset(){ demoU = {tokens_in:0,tokens_out:0,total:0,calls:0,by_agent:{},by_tier:{},est_cost_usd:PRICING?0:null,budget:null}; setUsage(demoU); }
+function demoBurn(agent){
+  const tier = DEMO_TIER[agent]; if (!tier || !demoU) return;
+  const h = hash(agent + demoU.calls), tin = 1200 + h%1800, tout = 700 + (h>>4)%1500;
+  const u = {...demoU, by_agent:{...demoU.by_agent}, by_tier:{...demoU.by_tier}};
+  u.tokens_in += tin; u.tokens_out += tout; u.total += tin+tout; u.calls += 1;
+  u.by_agent[agent] = (u.by_agent[agent]||0) + tin + tout;
+  const t = u.by_tier[tier] || {tokens_in:0,tokens_out:0,total:0,calls:0};
+  u.by_tier[tier] = {tokens_in:t.tokens_in+tin, tokens_out:t.tokens_out+tout, total:t.total+tin+tout, calls:t.calls+1};
+  if (PRICING && PRICING[tier]) u.est_cost_usd = (u.est_cost_usd||0) + (tin*PRICING[tier].in + tout*PRICING[tier].out)/1e6;
+  demoU = u; setUsage(u);
+}
+
+// ---------------- LIVE / REPLAY ----------------
+const seen = new Set(); let liveQueue = [], queueRunning = false;
+window.__roomLat = [];          // độ trễ store → trình duyệt (giây) của từng frame SSE, để đo
+async function getJSON(url, timeoutMs=4000){
+  const ctl = new AbortController(); const to = setTimeout(()=>ctl.abort(), timeoutMs);
+  try { const r = await fetch(url, {cache:'no-store', signal:ctl.signal}); if (!r.ok) throw new Error('HTTP '+r.status); return await r.json(); }
+  finally { clearTimeout(to); }
+}
+const roomURL = () => PROJECT ? `/api/room?limit=200&project=${encodeURIComponent(PROJECT)}` : '/api/room?limit=200';
+const fetchRoom = (ms) => getJSON(roomURL(), ms);
+function showErr(t){ const el=document.getElementById('err'); el.textContent=t; el.style.display='block'; }
+function hideErr(){ document.getElementById('err').style.display='none'; }
+function applySnapshot(snap, first){
+  STATE = {agents: snap.agents||[], tasks: snap.tasks||[], gate: snap.gate};
+  makeAgents(STATE.agents);
+  for (const e of snap.events||[]){
+    if (seen.has(e.id)) continue; seen.add(e.id);
+    if (first) addLog(e, false); else liveQueue.push(e);
+  }
+  if (first){
+    for (const t of STATE.tasks) if (['in_dev','testing','qc','blocked'].includes(t.status))
+      spawnKid(t.id, (['in_dev','blocked'].includes(t.status) && t.owner_agent) || 'c1_dev', D, false);
+    renderLog();
+  }
+  if (snap.usage) setUsage(snap.usage);
+  applyState();
+}
+function applyFrame(f){
+  window.__roomLat.push(Date.now()/1000 - f.ts);
+  applySnapshot({agents:f.agents, tasks:f.tasks, gate:f.gate, events:f.events, usage:f.usage}, false);
+}
+function startQueue(){
+  if (queueRunning) return; queueRunning = true;
+  // hàng đợi dài (nhiều event cùng lúc) → phát nhanh hơn để không tụt xa thực tế
+  (async()=>{ for(;;){ const e = liveQueue.shift(); if (e){ playEvent(e); await sleep(Math.max(220, 1100 - 160*liveQueue.length)); } else await sleep(150); } })();
+}
+async function runLive(first){          // board DASH của dashboard: poll /api/room mỗi 2s (như cũ)
+  applySnapshot(first, true); startQueue();
+  for(;;){
+    await new Promise(r=>setTimeout(r, 2000));
+    try { applySnapshot(await fetchRoom(), false); hideErr(); }
+    catch(err){ showErr('Mất kết nối /api/room — đang thử lại…'); }
+  }
+}
+let lastSeq = 0;
+function runStream(first){              // project trong event store: SSE, fallback poll khi SSE lỗi
+  applySnapshot(first, true); lastSeq = first.seq||0; startQueue();
+  let es = null, pollT = null, retryT = null;
+  const stopPoll = ()=>{ if (pollT){ clearInterval(pollT); pollT=null; } };
+  const startPoll = ()=>{ if (pollT) return; pollT = setInterval(async()=>{
+      try { const s = await fetchRoom(); applySnapshot(s, false); lastSeq = Math.max(lastSeq, s.seq||0); }
+      catch(e){ showErr('Mất kết nối server — đang thử lại…'); } }, 2000); };
+  const connect = ()=>{
+    retryT = null;
+    es = new EventSource(`/api/room/stream?project=${encodeURIComponent(PROJECT)}&since=${lastSeq}`);
+    es.addEventListener('room', m=>{ const f = JSON.parse(m.data); applyFrame(f); lastSeq = Math.max(lastSeq, f.seq); stopPoll(); hideErr(); });
+    es.onopen = ()=>{ stopPoll(); hideErr(); };
+    es.onerror = ()=>{ showErr('SSE gián đoạn — tạm poll /api/room, đang nối lại…'); startPoll();
+      if (es.readyState===2 && !retryT){ es.close(); retryT = setTimeout(connect, 4000); } };   // 2 = CLOSED
+  };
+  connect();
+}
+function resetRoom(){
+  STATE = {agents: (STATE.agents.length?STATE.agents:FALLBACK_AGENTS).map(a=>({...a, status:'idle', current_task:null, tasks:[]})), tasks: [], gate: null};
+  for (const t of [...kids.keys()]) killKid(t);
+  for (const c of chars.values()){ c.inHuddle=false; }
+  liveQueue = []; seen.clear(); logItems = []; renderLog(); applyState();
+}
+async function runReplay(){
+  let frames;
+  try { frames = (await getJSON(`/api/room/frames?project=${encodeURIComponent(PROJECT)}&since=0`, 8000)).frames || []; }
+  catch(e){ showErr('Không đọc được replay — '+e.message); return; }
+  const meta = document.getElementById('modeTxt');
+  for (;;){
+    resetRoom(); setUsage({tokens_in:0,tokens_out:0,total:0,calls:0,by_agent:{},by_tier:{},est_cost_usd:0,budget:null});
+    for (let i=0;i<frames.length;i++){
+      const f = frames[i];
+      STATE = {agents:f.agents, tasks:f.tasks, gate:f.gate}; makeAgents(STATE.agents); applyState(); setUsage(f.usage);
+      for (const e of f.events){ if (seen.has(e.id)) continue; seen.add(e.id); playEvent(e); await sleep(1000); }
+      meta.textContent = `Replay ${PROJECT} · seq ${f.seq} · ${i+1}/${frames.length} frame`;
+      if (!f.events.length) await sleep(250);
+    }
+    await sleep(4000);
+  }
+}
+
+// ---------------- khởi động ----------------
+let MODE = 'demo', PROJECT = null;
+buildRoom(); makeAgents(FALLBACK_AGENTS); applyState(); renderLog(); setUsage({tokens_in:0,tokens_out:0,total:0,calls:0,by_agent:{},by_tier:{},est_cost_usd:null,budget:null});
+requestAnimationFrame(frame);
+function setBadge(kind, txt){ const b = document.getElementById('badge'); b.textContent = kind.toUpperCase(); b.className = 'badge '+kind;
+  document.getElementById('modeTxt').textContent = txt; MODE = kind; }
+function projectPicker(list, current){
+  const sel = document.getElementById('proj'), row = document.getElementById('prow');
+  const opt = (v, t) => `<option value="${esc(v)}"${v===(current||'')?' selected':''}>${esc(t)}</option>`;
+  sel.innerHTML = opt('', 'Dashboard (DASH)') + list.map(p=>opt(p.id, `${p.active?'● ':'○ '}${p.id}${p.phase_name?' · '+p.phase_name:''}`)).join('') + opt('__demo', 'Demo (kịch bản mẫu)');
+  row.classList.add('show');
+  const cur = list.find(p=>p.id===current);
+  document.getElementById('ldot').classList.toggle('on', !!(cur && cur.active));
+  const rp = document.getElementById('rpBtn'); rp.style.display = cur ? '' : 'none';
+  if (cur){ const q = new URLSearchParams({project:cur.id}); if (MODE!=='replay') q.set('replay','1');
+    rp.href = '?'+q; rp.textContent = MODE==='replay' ? (cur.active?'● Live':'⟲ Replay lại') : '⟲ Replay'; }
+  sel.onchange = ()=>{ const v = sel.value; location.search = v==='__demo' ? '?demo=1' : v ? '?'+new URLSearchParams({project:v}) : '?dash=1'; };
+}
+(async()=>{
+  const q = new URLSearchParams(location.search), force = q.has('demo') && q.get('demo')!=='0';
+  let plist = null;
+  if (location.protocol!=='file:'){ try { plist = await getJSON('/api/projects', 2500); PRICING = plist.pricing || null; } catch(e){ plist = null; } }
+  if (!force && plist){
+    const list = plist.projects || [];
+    PROJECT = q.get('project') || null;
+    if (PROJECT && !list.some(p=>p.id===PROJECT)) { showErr(`Không có project ${PROJECT} trong event store — hiện board Dashboard.`); PROJECT = null; }
+    if (!PROJECT && !q.has('project') && !q.has('dash')){ const a = list.find(p=>p.active); if (a) PROJECT = a.id; }
+    const cur = list.find(p=>p.id===PROJECT);
+    if (cur && (q.get('replay')==='1' || !cur.active)){
+      setBadge('replay', `Replay từ event store · ${PROJECT}`); projectPicker(list, PROJECT); runReplay(); return;
+    }
+    let snap = null; try { snap = await fetchRoom(3000); } catch(e){ snap = null; }
+    if (snap && Array.isArray(snap.agents)){
+      setBadge('live', PROJECT ? `Event store · ${PROJECT} · SSE realtime` : 'Board Dashboard (DASH) · cập nhật mỗi 2s');
+      projectPicker(list, PROJECT);
+      if (PROJECT) runStream(snap); else runLive(snap);
+      setInterval(async()=>{ try { const pl = await getJSON('/api/projects', 4000); projectPicker(pl.projects||[], PROJECT); } catch(e){} }, 10000);
+      return;
+    }
+  }
+  if (!force && !plist && location.protocol!=='file:'){        // server cũ không có /api/projects
+    try { const snap = await fetchRoom(2500); if (snap && Array.isArray(snap.agents)){ setBadge('live','Blackboard thật · cập nhật mỗi 2s'); runLive(snap); return; } } catch(e){}
+  }
+  setBadge('demo', 'Kịch bản mẫu: presales → discovery → build → G3');
+  if (plist) projectPicker(plist.projects||[], '__demo');
+  runDemo();
+})();
+</script>
+</body></html>

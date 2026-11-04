@@ -113,7 +113,9 @@ class Blackboard:
 
     def append(self, zone, entry, agent):
         self._check(zone, agent, "append_only")
-        full = {**entry, "source_agent": entry.get("source_agent", agent)}
+        # source_agent LUÔN = writer thật (agent): payload (có thể từ output model) không tự khai được
+        # source_agent khác, vd "gate_ui" để giả bản ghi resolution (review PR #2).
+        full = {**entry, "source_agent": agent}
         with self._wlock:
             # trace_log = sự kiện điều phối (events.emit) → kind "event"; zone append-only khác → zone_append
             self._log("event" if zone == "trace_log" else "zone_append", full, zone=zone, agent=agent)

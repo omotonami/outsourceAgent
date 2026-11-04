@@ -56,9 +56,9 @@ class RoomFeed:
     def usage_dict(self) -> dict:
         return self.usage.to_dict(self._price, self._budget)
 
-    def _snap(self, levels=None, limit=None) -> dict:
+    def _snap(self, levels=None, limit=None, now=None) -> dict:
         gate = gate_view.room_gate(self._view)           # gate đang chờ theo project_status (cùng nguồn store)
-        snap = room_state.snapshot(self._view, gate=gate, levels=levels, limit=limit, meta=self.meta)
+        snap = room_state.snapshot(self._view, gate=gate, levels=levels, limit=limit, meta=self.meta, now=now)
         if gate and snap["gate"]:
             snap["gate"]["who"] = gate["who"]
         return {**snap, "usage": self.usage_dict()}
@@ -71,7 +71,7 @@ class RoomFeed:
         out = []
         for row in self.store.read(self.project_id, after=self.last, limit=limit):
             self._apply(row)
-            snap = self._snap(levels)
+            snap = self._snap(levels, now=row.ts)       # frame theo thời điểm của dòng (replay đúng lịch sử)
             new = [{**e, "seq": row.seq} for e in snap["events"] if e["id"] not in self.seen]
             view = (snap["agents"], snap["tasks"], snap["usage"]["total"])
             if not new and view == self._prev:

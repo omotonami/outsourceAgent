@@ -29,6 +29,9 @@ from . import common, pipeline
 BRIEF_SCHEMA = "src/blackboard/schema/lead_brief.json"
 _FRONT = re.compile(r"\A\s*---\s*\n(.*?)\n---\s*\n?(.*)\Z", re.S)
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+# Huddle (gọi model) chỉ khi phase đang mở: đang chạy phase hoặc đang chờ gate của chính phase đó.
+# State terminal (RELEASED/ESCALATED/ABANDONED) hay phase khác → từ chối, không gọi model.
+HUDDLE_OPEN = {"presales": ("PRESALES", "AWAIT_G1"), "discovery": ("DISCOVERY", "AWAIT_G2")}
 
 
 def load_brief(path: str | Path) -> dict:
@@ -107,6 +110,12 @@ def cmd_huddle(a) -> int:
         print(f"LỖI: không có project {a.id}", file=sys.stderr)
         return 1
     b = common.resume(store, a.id)
+    st = common.state_of(b)
+    if st in common.TERMINAL or st not in HUDDLE_OPEN[a.phase]:
+        print(f"TỪ CHỐI huddle {a.phase}: project {a.id} đang ở {st} — huddle chỉ chạy khi phase đang mở "
+              f"({'/'.join(HUDDLE_OPEN[a.phase])}). ESCALATED: người gỡ trước (src/ops/escalation).",
+              file=sys.stderr)
+        return 2
     common.seed_ledger(store, a.id)
     trig = huddle_trigger.check(b, a.phase)        # không truyền autonomy: người gọi tay = manual
     if trig is None and not a.question:

@@ -2,7 +2,11 @@
 
 - State dựng lại từ event store (Blackboard.resume + project_status.state) → chạy tiếp qua nhiều
   process / nhiều ngày. Mỗi bước idempotent: zone đã có thì không gọi lại agent đó.
-- Agent gọi qua runner trong src/agents/ (→ gateway). BUILD dùng Dispatcher. Huddle KHÔNG chạy ở đây
+- Agent gọi qua runner trong src/agents/ (→ gateway). BUILD dùng Dispatcher.
+- Mỗi lần gọi agent ở presales/discovery/security (và huddle gọi tay, src/ops/project.py): trace_log ghi
+  ASSIGN {from: orchestrator, to: agent, agent, phase, project} TRƯỚC khi gọi, rồi RESULT (ok) hoặc BLOCKED
+  (lỗi / exception) với summary ngắn — không raw output. Phòng 3D (room_state) suy working/idle/blocked từ cặp
+  này (task_id rỗng = bước phase; BUILD giữ sự kiện theo task của Dispatcher). Huddle KHÔNG chạy ở đây
   (chỉ khi người gọi `project huddle`, quyết định chủ repo).
 - Gate: chỉ ĐỌC chữ ký (board.is_signed). Module này không có đường ký gate (luật 10, specs/06_gates.md);
   người ký/trả lại qua src/ops/gate.py (dashboard hoặc terminal tương tác do người gõ).
@@ -76,6 +80,32 @@ class Outcome:
         return ["RELEASED — không còn bước tự động."]
 
 
+SUMMARY_REASON_MAX = 160
+
+
+def assign(board, agent: str, phase: str, pid: str) -> dict:
+    """ASSIGN cho một bước phase (task_id rỗng) — Phòng 3D thấy agent 'đang làm'."""
+    return events.emit(board, "ASSIGN", writer=WRITER, by=WRITER, agent=agent, phase=phase, project=pid,
+                       **{"from": WRITER, "to": agent})
+
+
+def finish(board, agent: str, phase: str, pid: str, res: dict | None = None,
+           exc: BaseException | None = None) -> dict:
+    """RESULT (ok) / BLOCKED (lỗi) sau bước phase. Chỉ mã lỗi + lý do cắt ngắn (runtime không đưa raw output
+    vào reason); exception → tên lớp + thông điệp cắt ngắn."""
+    if exc is None and res is not None and res.get("ok"):
+        return events.emit(board, "RESULT", writer=WRITER, by=WRITER, agent=agent, phase=phase, project=pid,
+                           ok=True, **{"from": agent, "to": WRITER})
+    if exc is not None:
+        why = f"{type(exc).__name__}: {exc}"
+    else:
+        why = f"{(res or {}).get('error') or 'lỗi'}: {(res or {}).get('reason') or ''}"
+    why = " ".join(why.split())
+    why = why if len(why) <= SUMMARY_REASON_MAX else why[: SUMMARY_REASON_MAX - 1] + "…"
+    return events.emit(board, "BLOCKED", writer=WRITER, by=WRITER, agent=agent, phase=phase, project=pid,
+                       reason=f"{agent}: {why}", **{"from": agent, "to": WRITER})
+
+
 def _check(res: dict, agent: str) -> dict:
     if res.get("ok"):
         return res
@@ -144,8 +174,16 @@ class Runner:
         """Gọi runner của agent (fn nhận kw) — nơi duy nhất gọi agent ở presales/discovery/security."""
         self.current = agent
         kw = self._kw(agent)
+        phase = self.PHASES.get(self.orch.state, self.orch.state.lower())
+        assign(self.board, agent, phase, self.pid)
         try:
-            return fn(kw)
+            res = fn(kw)
+        except BaseException as e:
+            finish(self.board, agent, phase, self.pid, exc=e)
+            raise
+        else:
+            finish(self.board, agent, phase, self.pid, res)
+            return res
         finally:
             if "signals" in kw:
                 events.emit(self.board, "DECISION", writer=WRITER, by=BY_ESCALATION, decision="retry_done",

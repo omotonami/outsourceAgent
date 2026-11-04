@@ -100,12 +100,12 @@ def events(board) -> list[dict]:
             agent = assigned.get(tid) or DEFAULT_AGENT
             r = _with_route(ev, e.get("parent") or by, agent, parent=e.get("parent") or by, agent=agent)
         elif kind == EventType.RESULT:
-            agent = assigned.get(tid)
+            agent = assigned.get(tid) or (None if tid else e.get("agent"))
             r = _with_route(ev, agent or by, by if agent else None, agent=agent)
         elif kind == EventType.KILL:
             r = _with_route(ev, by, assigned.get(tid), agent=assigned.get(tid))
         else:                                                   # BLOCKED
-            agent = assigned.get(tid)
+            agent = assigned.get(tid) or (None if tid else e.get("agent"))
             r = _with_route(ev, agent or by, None, agent=agent)
         out.append({"id": f"trace_log:{i}", **r})
     for i, e in enumerate(board.get("huddle_log") or []):
@@ -124,6 +124,31 @@ def events(board) -> list[dict]:
     order = {e["id"]: n for n, e in enumerate(out)}
     out.sort(key=lambda e: (e["ts"] is None, e["ts"] or 0, order[e["id"]]))
     return out
+
+
+ESCALATION_BY = "orchestrator.escalation"   # src/ops/escalation.py: người gỡ → xoá 'blocked' của bước phase
+ESCALATION_RESOLVE = ("retry", "backtrack", "abandon")
+
+
+def step_status(board) -> dict:
+    """agent → working | blocked theo bước phase (trace_log, task_id rỗng — src/ops/pipeline.assign/finish):
+    ASSIGN chưa có RESULT/BLOCKED → working; BLOCKED cuối → blocked (tới ASSIGN kế tiếp hoặc người gỡ
+    ESCALATED); RESULT → hết (idle)."""
+    st: dict = {}
+    for e in board.get("trace_log") or []:
+        kind = str(e.get("event") or "").upper()
+        if kind == EventType.DECISION and e.get("by") == ESCALATION_BY and e.get("decision") in ESCALATION_RESOLVE:
+            st = {a: s for a, s in st.items() if s != "blocked"}
+            continue
+        if e.get("task_id") or not e.get("agent"):
+            continue
+        if kind == EventType.ASSIGN:
+            st[e["agent"]] = "working"
+        elif kind == EventType.RESULT:
+            st.pop(e["agent"], None)
+        elif kind == EventType.BLOCKED:
+            st[e["agent"]] = "blocked"
+    return st
 
 
 def _risk_blocked_agents(board) -> set:
@@ -147,14 +172,16 @@ def snapshot(board, *, active=(), gate: dict | None = None, levels: dict | None 
         evs = evs[-int(limit):]
     gate_agents = set((gate or {}).get("agents") or [])
     risk_blocked = _risk_blocked_agents(board)
+    steps = step_status(board)
     agents = []
     for a in (meta if meta is not None else _agent_meta(root)):
         mine = [t for t in ts if t["owner_agent"] == a["id"] and t["status"] in (*WORKER_STATES, BLOCKED)]
-        if any(t["status"] == BLOCKED for t in mine) or a["id"] in risk_blocked:
+        step = steps.get(a["id"])
+        if any(t["status"] == BLOCKED for t in mine) or a["id"] in risk_blocked or step == "blocked":
             status = "blocked"
         elif a["id"] in gate_agents:
             status = "waiting_gate"
-        elif mine or a["id"] in active:
+        elif mine or a["id"] in active or step == "working":
             status = "working"
         else:
             status = "idle"

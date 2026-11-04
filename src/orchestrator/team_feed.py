@@ -32,15 +32,17 @@ def _trace_events(entries):
         if kind not in TYPES:
             continue                         # gateway/khác: không phải sự kiện team
         tid = e.get("task_id")
+        step = tid or e.get("agent")          # bước phase (pipeline ops) không có task_id → nhãn = agent
         if kind == EventType.SPAWN:
             s = f"spawn {tid}" + (f" ({e['trigger']})" if e.get("trigger") else "") \
                 + (f" · lần {e['attempt']}" if e.get("attempt") else "")
         elif kind == EventType.RESULT:
             ok = e.get("ok")
-            s = f"{tid}: " + ("OK" if ok else f"FAIL — {e.get('reason') or 'không rõ'}") \
+            s = f"{step}: " + ("OK" if ok else f"FAIL — {e.get('reason') or 'không rõ'}") \
                 + (" · QC critical" if e.get("qc_critical") else "")
         elif kind == EventType.ASSIGN:
-            s = f"giao {tid}" + (f" cho {e['agent']}" if e.get("agent") else "")
+            s = (f"giao {tid}" if tid else f"giao bước {e.get('phase') or '?'}") \
+                + (f" cho {e['agent']}" if e.get("agent") else "")
         else:                                # BLOCKED / KILL
             s = (f"{tid}: " if tid else "") + str(e.get("reason") or kind.lower())
         out.append({"type": kind, "ts": _ts(e.get("ts")), "actor": e.get("by") or e.get("source_agent"),

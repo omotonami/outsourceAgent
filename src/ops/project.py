@@ -114,8 +114,19 @@ def cmd_huddle(a) -> int:
         return 0
     q = a.question or trig["question"]
     ctx_in = (trig or {}).get("context") or {}
-    res = huddle.run(b, a.phase, q, ctx_in, {"project_id": a.id}, sender=_sender(a),
-                     trigger=(trig or {}).get("trigger") or "manual")
+    roles = (huddle.config().get("roles") or {}).get(a.phase) or {}
+    who = list(dict.fromkeys(roles.get(r) for r in ("proposer", "critic", "decider") if roles.get(r)))
+    for ag in who:                                  # Phòng 3D: thành viên huddle "đang làm"
+        pipeline.assign(b, ag, a.phase, a.id)
+    try:
+        res = huddle.run(b, a.phase, q, ctx_in, {"project_id": a.id}, sender=_sender(a),
+                         trigger=(trig or {}).get("trigger") or "manual")
+    except BaseException as e:
+        for ag in who:
+            pipeline.finish(b, ag, a.phase, a.id, exc=e)
+        raise
+    for ag in who:
+        pipeline.finish(b, ag, a.phase, a.id, res)
     if res.get("ok"):
         rec = res["decision_record"]
         print(f"Huddle {a.phase}: chosen={rec.get('chosen')!r} · {rec.get('rounds')} vòng · "

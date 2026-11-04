@@ -71,5 +71,24 @@ typed_confirm, action lạ, hash 409), settings deny.
 
 Số test sau mục 2: **537**.
 
+## Mục 3 — pipeline phát sự kiện theo agent (lỗi B)
+**Nguyên nhân gốc:** `src/ops/pipeline.py` gọi agent presales/discovery/security trực tiếp, không ghi sự kiện
+team nào; chỉ Dispatcher (BUILD) ghi ASSIGN/SPAWN/RESULT theo task. Phòng 3D suy "đang làm" từ task/`active`
+→ ở presales/discovery luôn "0 đang làm".
+
+| Đã đổi gì | File chính |
+|---|---|
+| `pipeline.assign/finish`: trước mỗi lần gọi agent (`Runner._call`, mọi phase presales/discovery/security, kể cả b4) ghi ASSIGN `{from: orchestrator, to: agent, agent, phase, project}` (task_id rỗng = bước phase); sau đó RESULT `{ok: true}` hoặc BLOCKED `{reason: "<agent>: <mã lỗi>: <lý do ≤160 ký tự>"}`; exception (mạng, budget…) → BLOCKED rồi ném tiếp. Không raw output | `src/ops/pipeline.py` |
+| Huddle gọi tay (`project huddle`): ASSIGN cho từng thành viên (proposer/critic/decider theo config) trước, RESULT/BLOCKED sau | `src/ops/project.py` |
+| `room_state.step_status`: ASSIGN chưa có RESULT/BLOCKED → working; BLOCKED cuối → blocked (tới ASSIGN kế tiếp hoặc DECISION người gỡ ESCALATED retry/backtrack/abandon); RESULT → idle. `snapshot` dùng (ưu tiên giữ nguyên: blocked > waiting_gate > working > idle). Route event: RESULT/BLOCKED của bước phase đi từ agent → orchestrator | `src/orchestrator/room_state.py` |
+| Team feed summary cho bước phase: "giao bước presales cho a1_bu", "a1_bu: OK" (trước đây sẽ là "giao None …") | `src/orchestrator/team_feed.py` |
+
+Test mới (`tests/contract/test_pipeline_events.py`, 8): `--mock` presales → ASSIGN/RESULT a1, a2, a3 đúng thứ tự +
+trường from/to/phase/project; snapshot giữa chừng (process khác đọc event store khi a2 đang chạy) → a2 working, đúng 1
+agent working; discovery b1→b4; agent lỗi → BLOCKED không chứa raw output, người retry → hết blocked, lỗi lại → blocked
+(retry_done không xoá); exception → BLOCKED; huddle gọi tay; unit step_status + summary.
+
+Số test sau mục 3: **545**.
+
 ## Việc còn mở
 - (cập nhật ở cuối đợt)

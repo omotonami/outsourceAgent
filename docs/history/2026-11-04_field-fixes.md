@@ -115,3 +115,32 @@ Số test cuối đợt: **545** (481 + 18 runtime + 38 escalation + 8 pipeline 
   quyết có nâng lên 2 theo card ("retry ≤ 2") không.
 - Card Output của a2 vẫn mô tả estimate SAU khi Code enrich (khác output LLM ở MODULE 4) — có chủ đích, ghi rõ trong spec.
 - Bản ghi resolution trong risk_register có `resolved_by` = tên người do chính người gõ (gate_ui/terminal) — không phải bot điền.
+
+## Review PR #2 + sửa (bot "Vá", nhánh `fix/field-events`, sau `a4d041e`)
+Reviewer chứng minh bằng script (`/tmp/soi3/t_extract.py`, `t_msg.py`, `t_who.py`) — đã chuyển thành test.
+
+| # | Phát hiện review → đã sửa | File chính |
+|---|---|---|
+| 1 | `_extract_json`: ≥ 2 object khớp schema mà KHÁC nhau → `AmbiguousJSON` → retry kèm "chỉ trả MỘT object JSON" (bản trùng nhau coi là một); span nằm trong `{` chưa đóng tới cuối (output bị cắt) không nhận; quét cân ngoặc một lượt O(n) có xét chuỗi/escape (không raw_decode ở mọi `{`, không dựng lỗi có lineno trên cả text); trần `agent_runtime.extract_max_chars` / `extract_max_candidates`; `RecursionError` = lỗi parse | `src/agents/runtime.py`, `config/runtime.yaml` |
+| 2 | Lý do lỗi LƯU (`SCHEMA_FAIL`/`INVALID_INPUT` reason → risk_register/trace_log/report/gate_view/room) chỉ validator + path + kiểu thực tế (+ tên khoá thiếu lấy từ schema); chi tiết `e.message` chỉ gửi model ở lượt retry (qua gateway, không lưu) | `src/agents/runtime.py` |
+| 3 | `project huddle` từ chối (rc 2, không gọi model) khi state terminal/ESCALATED hoặc phase không mở (presales: PRESALES/AWAIT_G1; discovery: DISCOVERY/AWAIT_G2). `project run` đã dừng sẵn ở terminal | `src/ops/project.py` |
+| 4 | `team_feed.resolved_indexes` chỉ tính bản ghi `source_agent == gate_ui` + `resolved_by` là người (`confirm.is_human`); `Blackboard.append` ép `source_agent` = writer thật (payload/ output model không tự khai `gate_ui`) | `src/orchestrator/team_feed.py`, `src/blackboard/store.py` |
+| 5 | `confirm`: bỏ ký tự Unicode Cf trước NFKC; tách thêm `@` `/`; thêm id máy cố định (claude, claude-code, assistant, bot, chief, chief-ops) + `config/governance.yaml` (`confirm.machine_ids_extra`: soi, va, chief-of-staff); dạng viết liền/tách rời của mọi id máy (c1dev, gateui, "orch estrator") sinh tự động. Docstring + config ghi rõ: lớp chống dùng nhầm, KHÔNG phải xác thực | `src/governance/confirm.py`, `config/governance.yaml` (mới) |
+| 6 | `.claude/settings.json`: pytest chỉ allow đúng `pytest -q tests/` / `python -m pytest -q tests/` (khác → hỏi người, mặc định); `Edit/Write(tests/**)` → ask; deny `git diff --no-index*`. Runbook: mục "Quyền Claude — chỉ là lớp PHỤ" | `.claude/settings.json`, `docs/ops/runbook-daily.md` |
+| 7 | Server: MỌI request ghi (POST/PUT/PATCH/DELETE, gồm gate dự án, escalation, demo) phải `Content-Type: application/json` (415) và Host (+ Origin nếu có) là localhost/127.0.0.1/::1 hoặc `dashboard.allowed_hosts` (403); thiếu Origin chỉ qua khi Host hợp lệ. UI demo gửi JSON | `src/server/app.py`, `src/server/static/index.html`, `config/runtime.yaml` |
+| 8 | Phòng 3D: `working` của bước phase bị bỏ khi state là gate/terminal hoặc ASSIGN cũ hơn `eventstore.live_window_s` (process chết giữa chừng không kẹt "đang làm"); replay frame xét theo `ts` của dòng | `src/orchestrator/room_state.py`, `src/orchestrator/room_stream.py` |
+| 9 | Gỡ ESCALATED khi không rõ `from_state` (dữ liệu cũ): chỉ `backtrack` tới phase mà mọi gate phía trước đã ký (options + resolve cùng luật) | `src/ops/escalation.py` |
+| 10 | `Orchestrator.escalate` gắn `kind: "escalation"`; escalation/pipeline chọn risk theo kind (dữ liệu cũ không có kind: source_agent orchestrator và không có `phase` — risk scanner stub không bị chọn nhầm) | `src/orchestrator/state_machine.py`, `src/orchestrator/team_feed.py`, `src/ops/escalation.py`, `src/ops/pipeline.py` |
+
+Test mới: `tests/contract/test_runtime_extract_review.py`, `tests/contract/test_review_pr2_ops.py`,
+`tests/unit/test_confirm_review.py`, `tests/contract/test_app_write_guard.py`, + 1 test settings trong
+`test_ops_escalation.py`. Test cũ chỉnh hạ tầng: TestClient `base_url="http://localhost"`, body không phải JSON gửi kèm
+`Content-Type: application/json` (để vẫn kiểm 400), fake config giữ khoá `agent_runtime` khác.
+
+Số test sau review: **668** (545 + 123). `agent_lint --all` 14/14, `history_check --base origin/main` PASS.
+
+Việc còn mở (chủ repo quyết):
+- `live_window_s` (30 s) dùng chung cho "project live" và "ASSIGN quá hạn": lượt gọi model > 30 s sẽ hiện idle trên
+  snapshot dù process còn chạy — nếu cần, tách khoá riêng (vd `step_working_window_s`).
+- SSE chỉ phát frame khi có dòng mới; process chết thì client SSE chỉ thấy idle sau khi tải lại snapshot.
+- `{` lẻ không đóng trong văn bản TRƯỚC JSON → không nhận (không phân biệt được với output bị cắt) → retry.

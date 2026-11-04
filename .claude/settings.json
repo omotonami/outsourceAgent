@@ -11,8 +11,8 @@
       "Bash(python -m src.ops.prune --dry-run:*)",
       "Bash(python -m src.ops.prune --days:*)",
       "Bash(python -m src.ops.prune)",
-      "Bash(python -m pytest:*)",
-      "Bash(pytest:*)",
+      "Bash(pytest -q tests/)",
+      "Bash(python -m pytest -q tests/)",
       "Bash(python -m src.factory.agent_lint:*)",
       "Bash(python -m src.tools.checks.history_check:*)",
       "Bash(uvicorn src.server.app:app:*)",
@@ -29,7 +29,9 @@
       "Edit(config/**)",
       "Write(config/**)",
       "Edit(CLAUDE.md)",
-      "Write(CLAUDE.md)"
+      "Write(CLAUDE.md)",
+      "Edit(tests/**)",
+      "Write(tests/**)"
     ],
     "deny": [
       "Bash(git push:*)",
@@ -63,7 +65,9 @@
       "Bash(python -c *src.ops*gate*)",
       "Bash(python3 -c *src.ops*gate*)",
       "WebFetch(domain:localhost)",
-      "WebFetch(domain:127.0.0.1)"
+      "WebFetch(domain:127.0.0.1)",
+      "Bash(git diff --no-index:*)",
+      "Bash(git diff --no-index*)"
     ]
   }
 }

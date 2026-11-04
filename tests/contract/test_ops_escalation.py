@@ -314,3 +314,12 @@ def test_claude_settings_deny_escalation_resolve():
     assert "Bash(python3 -m src.ops.escalation:*)" in perms["deny"]
     assert any("api/projects" in d and "escalation" in d for d in perms["deny"])
     assert not any("escalation" in a for a in perms["allow"] + perms.get("ask", []))
+
+
+def test_claude_settings_pytest_tests_and_git_diff_review_pr2():
+    perms = json.loads((ROOT / ".claude/settings.json").read_text(encoding="utf-8"))["permissions"]
+    py = [a for a in perms["allow"] if "pytest" in a]
+    assert sorted(py) == ["Bash(pytest -q tests/)", "Bash(python -m pytest -q tests/)"]
+    assert not any(a.endswith(":*)") and "pytest" in a for a in perms["allow"])
+    assert {"Edit(tests/**)", "Write(tests/**)"} <= set(perms["ask"])
+    assert any(d.startswith("Bash(git diff --no-index") for d in perms["deny"])

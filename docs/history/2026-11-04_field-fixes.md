@@ -46,5 +46,30 @@ raw output; số retry từ config; system có schema; mọi MODULE 4 có tóm t
 
 Số test sau mục 1: **499**.
 
+## Mục 2 — NGƯỜI gỡ ESCALATED (lỗi A, phần "kẹt ESCALATED")
+Trước đây: `project run` gặp ESCALATED chỉ in "CLI không tự gỡ ESCALATED"; state machine không có đường ra.
+Thiết kế theo đề bài: cùng chuẩn với ký gate (luật 10) — chỉ người, 2 kênh (dashboard API / terminal TTY người gõ).
+
+| Đã đổi gì | File chính |
+|---|---|
+| Lõi `resolve(project_id, action, signer, via, note)`: action `retry` (state về phase lỗi; agent lỗi chạy lại ở `run` kế tiếp với signal `retry_2` → router nâng tier lên `escalate_to` nếu `specs/03_routing.yaml` cho phép), `backtrack:<PRESALES\|DISCOVERY\|BUILD\|SECURITY>` (≤ phase lỗi; `Orchestrator.backtrack` huỷ chữ ký gate phía sau; chạy lại các phase từ đó tới phase lỗi như gate bị trả lại), `abandon` (state `ABANDONED`). Người: `confirm.require_human` (máy/agent/gate_ui/auto-* → từ chối, không ghi gì). `packet_hash` của tình trạng ESCALATED (đổi giữa chừng → từ chối) | `src/ops/escalation.py` |
+| Ghi: DECISION `by=orchestrator.escalation` (decision, signer, channel, note, escalated_from, agent/signals hoặc backtrack_to/rerun) vào trace_log; risk_register là append-only → APPEND bản ghi resolution `{resolves: <chỉ số risk escalate>, status: resolved, resolved_by: <người>, via: gate_ui}` (writer gate_ui); `project_status` cập nhật | `src/ops/escalation.py` |
+| Consumer risk coi risk đã được trỏ bởi bản ghi resolution là đóng: `team_feed.resolved_indexes/open_risks`; dùng ở room_state, status.compute, gate_view highlights, report, e2_cos, pipeline | `src/orchestrator/{team_feed,room_state,status,gate_view}.py`, `src/ops/{report,pipeline}.py`, `src/agents/e2_cos.py` |
+| Pipeline: lúc escalate ghi DECISION `decision=escalate {escalated_from, agent}`; dự án escalate từ bản cũ (không có bản ghi này — như dự án thật ở máy công ty) → suy phase từ lịch sử `project_status` trong event store / tiền tố agent trong lý do. Gọi agent qua `_call` (kw + signal retry; xong → DECISION `retry_done`). Rerun nhận cả DECISION backtrack của escalation. `ABANDONED` → dừng, rc 0. "CẦN NGƯỜI LÀM" khi ESCALATED chỉ lệnh/API gỡ, nói rõ Claude không chạy | `src/ops/pipeline.py`, `src/ops/report.py` |
+| State `ABANDONED` (terminal, không transition ra) thêm vào danh sách states — đề bài yêu cầu "trạng thái CLOSED/ABANDONED ghi rõ". Bản spec `specs/01_state_machine.yaml` sửa đồng bộ (chỉ danh sách states). `common.TERMINAL` + `prune --closed-project` nhận ABANDONED. Guard/transition không đổi | `src/orchestrator/transitions.yaml`, `specs/01_state_machine.yaml`, `src/ops/common.py`, `src/ops/prune.py` |
+| Terminal: `python -m src.ops.escalation resolve --id <id> --action retry\|backtrack:DISCOVERY\|abandon [--note]` — bắt TTY, in tóm tắt + hash, người gõ tên + `XAC NHAN`; không nhận tên người qua tham số | `src/ops/escalation.py` |
+| API: `GET /api/projects/{id}/escalation`, `POST /api/projects/{id}/escalation/{action}` body `signer` + `typed_confirm` (+ `note`, `packet_hash`); mã lỗi như gate (400/404/409). **Không sửa UI html** — đợt UI bên công ty thêm nút gọi API này. Test "endpoint ghi duy nhất" cập nhật: gate + escalation | `src/server/app.py`, `tests/contract/test_eventstore.py` |
+| `.claude/settings.json` deny: `python[3] -m src.ops.escalation`, `.venv/bin/python …`, `python src/ops/escalation.py`, `curl/wget/http *api/projects/*/escalation*`, `python -c *src.ops*escalation*` (như gate) | `.claude/settings.json` |
+| Skill `flow-new-project`: mục ESCALATED chỉ cách người gỡ, Claude chỉ đưa lệnh | `.claude/skills/flow-new-project/SKILL.md` |
+
+Test mới (`tests/contract/test_ops_escalation.py`, 38): view (lý do/phase/agent/lựa chọn), retry → `run` gọi a1 bằng
+tier opus rồi tới AWAIT_G1 + `retry_done`, lần đầu không retry dùng sonnet, retry fail lại → ESCALATED lại, backtrack từ
+DISCOVERY về PRESALES huỷ G1 + chạy lại agent dù zone đã có, backtrack quá phase lỗi bị từ chối, abandon → ABANDONED,
+máy (11 biến thể) không gỡ được + không ghi gì, action/kênh/hash/project sai, dự án escalate từ bản cũ, CLI TTY (người
+gõ / 6 kiểu từ chối không ghi gì / không có cờ tên người / subprocess không TTY), API (GET, retry, backtrack, máy 400,
+typed_confirm, action lạ, hash 409), settings deny.
+
+Số test sau mục 2: **537**.
+
 ## Việc còn mở
 - (cập nhật ở cuối đợt)

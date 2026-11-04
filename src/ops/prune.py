@@ -5,7 +5,7 @@
       N mặc định = specs/05_blackboard.yaml → retention.drafts_days. Bản mới nhất của mỗi zone giữ lại,
       nên `project run` vẫn chạy tiếp được (xoá theo dòng thô sẽ làm mất lead_brief của dự án dài ngày).
   python -m src.ops.prune --closed-project P-... [--db path]
-      Xoá TOÀN BỘ dữ liệu một project đã đóng (RELEASED / ESCALATED). retention.client_data_on_project_close
+      Xoá TOÀN BỘ dữ liệu một project đã đóng (RELEASED / ESCALATED / ABANDONED). retention.client_data_on_project_close
       = delete_or_return → NGƯỜI quyết xoá hay trả; chỉ chạy khi người đã quyết. Project đang chạy → từ chối.
 Sau khi xoá: checkpoint WAL + VACUUM để dữ liệu không còn trong file. In số dòng xoá.
 """
@@ -56,7 +56,7 @@ def prune_closed(store, pid: str) -> int:
         raise LookupError(f"không có project {pid}")
     st = common.state_of(Blackboard.load(pid, store))
     if st not in common.TERMINAL:
-        raise PermissionError(f"project {pid} đang ở {st}, chưa đóng (RELEASED/ESCALATED) — không xoá")
+        raise PermissionError(f"project {pid} đang ở {st}, chưa đóng (RELEASED/ESCALATED/ABANDONED) — không xoá")
     n = store.prune(time.time() + 86400 * 365 * 100, project_id=pid)
     store.vacuum()
     return n

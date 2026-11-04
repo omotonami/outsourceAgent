@@ -2,6 +2,8 @@
 PM agent và dashboard ĐỌC vùng này."""
 import datetime
 
+from src.orchestrator import team_feed
+
 
 def compute(board, state, budget_ratio=0.0):
     tb = board.get("task_backlog") or []
@@ -20,7 +22,7 @@ def compute(board, state, budget_ratio=0.0):
         "tasks_done": done, "tasks_total": len(tb) or 1,
         "gates_signed": sig,
         "budget_used_ratio": round(budget_ratio, 2),
-        "open_risks": sum(1 for r in rr if r.get("status") not in ("closed", "resolved")),
+        "open_risks": len(team_feed.open_risks(rr)),
         "overdue_questions": oq,
         "build_loops": br.get("loops", 0),
     }

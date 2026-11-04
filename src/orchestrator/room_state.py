@@ -114,8 +114,10 @@ def events(board) -> list[dict]:
     for i, r in enumerate(board.get("decision_records") or []):
         ev = team_feed._decision_events([r])[0]
         out.append({"id": f"decision_records:{i}", **_with_route(ev, HUDDLE, None)})
-    for i, r in enumerate(board.get("risk_register") or []):
-        evs = team_feed._risk_events([r])
+    rr = board.get("risk_register") or []
+    done = team_feed.resolved_indexes(rr)
+    for i, r in enumerate(rr):
+        evs = team_feed._risk_events([r], done, offset=i)
         if evs:
             out.append({"id": f"risk_register:{i}", **_with_route(evs[0], r.get("source_agent"), None,
                                                                   agent=r.get("source_agent"))})
@@ -125,8 +127,8 @@ def events(board) -> list[dict]:
 
 
 def _risk_blocked_agents(board) -> set:
-    return {r.get("source_agent") for r in board.get("risk_register") or []
-            if team_feed.is_open_risk(r) and str(r.get("severity") or "").lower() in team_feed.BLOCKING_SEVERITY}
+    return {r.get("source_agent") for r in team_feed.open_risks(board.get("risk_register"))
+            if str(r.get("severity") or "").lower() in team_feed.BLOCKING_SEVERITY}
 
 
 def agent_meta(root=None) -> list[dict]:

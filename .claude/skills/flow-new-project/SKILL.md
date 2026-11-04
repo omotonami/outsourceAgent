@@ -36,7 +36,11 @@ Mọi lệnh chạy ở gốc repo. Dữ liệu dự án là dữ liệu CÔNG T
   `POST /api/projects/*/gate` (curl/http/WebFetch), không gõ tên/`XAC NHAN` thay, không tìm cách lách.
   Người báo đã ký → Claude chạy lại `python -m src.ops.project run --id P-...` (đọc chữ ký từ event store).
   Người trả lại → `run` chạy lại agent của phase bị trả rồi dừng ở gate đó lần nữa.
-- `ESCALATED` → DỪNG, báo lý do + risk; người quyết. Không tự gỡ.
+- `ESCALATED` → DỪNG, báo lý do + phase/agent lỗi (`report daily` hoặc khối "CẦN NGƯỜI LÀM"). Chỉ NGƯỜI gỡ,
+  cùng chuẩn ký gate: terminal CỦA NGƯỜI `python -m src.ops.escalation resolve --id P-... --action retry`
+  (hoặc `backtrack:PRESALES|DISCOVERY|BUILD|SECURITY`, `abandon`) — người gõ tên + `XAC NHAN`; hoặc dashboard
+  `POST /api/projects/P-.../escalation/<action>` (body signer + typed_confirm; UI chưa có nút). Claude chỉ đưa lệnh,
+  không chạy (deny + bắt TTY), không gọi API này. Người báo đã gỡ (retry/backtrack) → Claude chạy lại `project run`.
 - `BLOCKED` → DỪNG, báo lý do (guard từ chối / task blocked / thiếu key / lỗi mạng). Không nới guard (luật 4).
 
 ## C. Huddle (chỉ khi người yêu cầu)

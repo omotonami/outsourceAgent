@@ -36,6 +36,7 @@ HIGH = ("High", "Critical")
 
 
 def _highlights(board, gate) -> dict:
+    from src.orchestrator import team_feed
     """Phần rủi ro hiện TRƯỚC nội dung (specs/06_gates.md cột 'Màn hình hiện gì trước')."""
     h: dict = {}
     if gate == "G1":
@@ -61,8 +62,7 @@ def _highlights(board, gate) -> dict:
         h["open_high_findings"] = [f for f in rep.get("findings") or []
                                    if f.get("severity") in HIGH and not f.get("remediation")]
     h["open_high_risks"] = [{k: r.get(k) for k in ("risk", "severity", "status", "phase")}
-                            for r in board.get("risk_register") or []
-                            if r.get("severity") in HIGH and r.get("status") not in ("closed", "resolved")]
+                            for r in team_feed.open_risks(board.get("risk_register")) if r.get("severity") in HIGH]
     return h
 
 

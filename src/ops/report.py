@@ -19,6 +19,7 @@ from pathlib import Path
 
 from src.agents import clarify
 from src.blackboard.store import Blackboard
+from src.orchestrator import team_feed
 
 from . import common
 
@@ -89,8 +90,7 @@ class ProjectReport:
                       key=lambda t: t["id"])
 
     def open_high(self) -> list[dict]:
-        return [r for r in self.board.get("risk_register") or []
-                if r.get("severity") in HIGH and r.get("status") not in ("closed", "resolved")]
+        return [r for r in team_feed.open_risks(self.board.get("risk_register")) if r.get("severity") in HIGH]
 
     def blocked_events(self, since: float | None = None) -> list[dict]:
         return [r.payload for r in self.rows if r.kind == "event" and r.zone == "trace_log"
@@ -128,7 +128,9 @@ class ProjectReport:
         if gate:
             out.append(f"Ký {gate} ({common.GATE_SIGNER[gate]}) qua dashboard (Gate dự án) hoặc người tự gõ `python -m src.ops.gate sign|reject --id ... --gate ...` — người, không phải bot.")
         if self.state == "ESCALATED":
-            out.append("Dự án ESCALATED — người quyết hướng xử lý.")
+            out.append("Dự án ESCALATED — NGƯỜI gỡ (retry | backtrack:<PHASE> | abandon) qua dashboard "
+                       "(POST /api/projects/<id>/escalation/<action>) hoặc tự gõ `python -m src.ops.escalation "
+                       "resolve --id ... --action ...` — người, không phải bot.")
         bt = self.blocked_tasks()
         if bt:
             out.append(f"{len(bt)} task BLOCKED — xem lý do, xử lý rồi chạy lại `run`.")

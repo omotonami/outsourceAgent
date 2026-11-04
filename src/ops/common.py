@@ -14,7 +14,7 @@ from src.orchestrator.state_machine import ORDER
 
 GATE_STATES = gate_view.STATE_GATE
 GATE_SIGNER = gate_view.GATE_SIGNER
-TERMINAL = ("RELEASED", "ESCALATED")
+TERMINAL = ("RELEASED", "ESCALATED", "ABANDONED")
 DASHBOARD = "uvicorn src.server.app:app  →  http://localhost:8000"
 
 

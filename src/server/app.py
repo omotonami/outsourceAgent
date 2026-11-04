@@ -352,6 +352,41 @@ async def project_gate_decide(pid: str, gid: str, decision: str, request: Reques
     return {**res, "view": ops_gate.view(kw["store"], pid)}
 
 
+@app.get("/api/projects/{pid}/escalation")
+def project_escalation(pid: str):
+    """Tình trạng ESCALATED (lý do, phase lỗi, agent, lựa chọn gỡ) + packet_hash để gửi lại khi gỡ."""
+    from src.ops import escalation as ops_esc
+    try:
+        return ops_esc.view(_store(), pid)
+    except ops_esc.EscalationError as e:
+        return JSONResponse({"error": str(e)}, GATE_ERR_STATUS.get(e.kind, 400))
+
+
+@app.post("/api/projects/{pid}/escalation/{action}")
+async def project_escalation_resolve(pid: str, action: str, request: Request):
+    """NGƯỜI gỡ ESCALATED (cùng chuẩn ký gate, luật 10). action: retry | backtrack:<PHASE> | abandon.
+    Body JSON: signer (tên NGƯỜI, bắt buộc), typed_confirm == "XAC NHAN" (bắt buộc), note, packet_hash (khuyên
+    gửi: tình trạng đổi → 409). UI chưa có nút (đợt UI bên công ty) — API dùng được ngay."""
+    from src.ops import escalation as ops_esc
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body phải là JSON object"}, 400)
+    if body.get("typed_confirm") != ops_esc.CONFIRM_WORD:
+        return JSONResponse({"error": f'phải gõ đúng "{ops_esc.CONFIRM_WORD}" vào typed_confirm'}, 400)
+    if not str(body.get("signer") or "").strip():
+        return JSONResponse({"error": "thiếu signer (tên người quyết)"}, 400)
+    store = _gate_store()
+    try:
+        res = ops_esc.resolve(pid, action, body["signer"], "dashboard", body.get("note"), store=store,
+                              expected_hash=body.get("packet_hash") or None)
+    except ops_esc.EscalationError as e:
+        return JSONResponse({"error": str(e)}, GATE_ERR_STATUS.get(e.kind, 400))
+    return {**res, "view": ops_esc.view(store, pid)}
+
+
 @app.get("/room", response_class=HTMLResponse)
 def room_page():
     return (HERE/"static"/"room.html").read_text(encoding="utf-8")

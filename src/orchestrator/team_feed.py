@@ -67,15 +67,35 @@ def _decision_events(entries):
     return out
 
 
-def is_open_risk(r: dict) -> bool:
-    """Risk còn mở: status rỗng = open; closed/resolved (không phân biệt hoa thường) = đóng."""
-    return str(r.get("status") or "open").lower() not in _CLOSED
+def is_open_risk(r: dict, resolved: bool = False) -> bool:
+    """Risk còn mở: status rỗng = open; closed/resolved (không phân biệt hoa thường) = đóng.
+    `resolved=True`: đã có bản ghi resolution trỏ tới risk này (xem resolved_indexes) → đóng."""
+    return not resolved and str(r.get("status") or "open").lower() not in _CLOSED
 
 
-def _risk_events(entries):
-    out = []
+def resolved_indexes(entries) -> set[int]:
+    """risk_register append-only: người đổi trạng thái bằng cách APPEND bản ghi {resolves: <chỉ số>, status:
+    resolved, resolved_by: <người>, ...} (src/ops/escalation.py). Trả tập chỉ số đã được giải quyết."""
+    out = set()
     for r in entries or []:
-        if not is_open_risk(r):
+        i = r.get("resolves") if isinstance(r, dict) else None
+        if isinstance(i, int) and not isinstance(i, bool):
+            out.add(i)
+    return out
+
+
+def open_risks(entries) -> list[dict]:
+    """Risk còn mở (status mở và chưa có bản ghi resolution trỏ tới)."""
+    done = resolved_indexes(entries)
+    return [r for i, r in enumerate(entries or []) if is_open_risk(r, i in done)]
+
+
+def _risk_events(entries, resolved: set[int] | None = None, offset: int = 0):
+    """`resolved`/`offset`: khi gọi theo từng entry (room_state) — chỉ số gốc = offset + vị trí."""
+    done = resolved_indexes(entries) if resolved is None else resolved
+    out = []
+    for j, r in enumerate(entries or []):
+        if not is_open_risk(r, offset + j in done):
             continue
         if str(r.get("severity") or "").lower() not in BLOCKING_SEVERITY:
             continue

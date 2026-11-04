@@ -16,6 +16,7 @@ chưa đóng (bị cắt) không nhận; quét cân ngoặc O(n) có trần conf
 (_err_msg) chỉ validator + path + kiểu thực tế, chi tiết (_err_detail) chỉ gửi model ở lượt retry.
 """
 import json
+import re
 
 from jsonschema import Draft202012Validator, ValidationError, validate
 
@@ -69,10 +70,21 @@ def extract_limits(root=None) -> tuple[int, int]:
     return out[0], out[1]
 
 
+_WS = re.compile(r"[ \t\r\n]*")
+
+
+def _opens_object(text, i) -> bool:
+    """`{` tại i có thể mở object JSON: ký tự không-trắng kế tiếp là `"` (khoá) hoặc `}` (object rỗng).
+    `{` văn xuôi (vd "dùng {name}", "ký tự { mở") không bao giờ mở object hợp lệ → bỏ qua khi cân ngoặc."""
+    j = _WS.match(text, i + 1).end()
+    return j < len(text) and text[j] in '"}'
+
+
 def _spans(text):
     """Một lượt quét O(n), cân ngoặc `{}` có xét chuỗi JSON (chỉ khi đang trong ngoặc — dấu " ở văn bản ngoài
-    không tính) và escape. Trả (spans, unclosed): spans = [(start, end)] mọi cặp {…} cân, xếp theo start
-    (ngoài trước trong); unclosed = vị trí `{` nhỏ nhất còn mở tới cuối text (output bị cắt) hoặc None."""
+    không tính) và escape. Chỉ `{` mở được object JSON (_opens_object) mới tính; `}` thừa bị bỏ qua.
+    Trả (spans, unclosed): spans = [(start, end)] mọi cặp {…} cân, xếp theo start (ngoài trước trong);
+    unclosed = vị trí `{` (dạng mở object) nhỏ nhất còn mở khi text kết thúc — output bị cắt — hoặc None."""
     spans, stack = [], []
     in_str = esc = False
     for i, ch in enumerate(text):
@@ -84,7 +96,8 @@ def _spans(text):
             elif ch == '"':
                 in_str = False
         elif ch == "{":
-            stack.append(i)
+            if _opens_object(text, i):
+                stack.append(i)
         elif ch == "}":
             if stack:
                 spans.append((stack.pop(), i + 1))
@@ -98,7 +111,8 @@ def _objects(text, max_candidates=None):
     """Object JSON cấp ngoài cùng trong text: [(start, end, obj)].
     - Ứng viên = cặp {…} cân (quét tay, không thử raw_decode ở MỌI '{' → không O(n²), không dựng
       JSONDecodeError có lineno trên cả text); decode từng span trên lát cắt riêng.
-    - Span nằm trong một `{` chưa đóng tới cuối (output bị cắt) → KHÔNG nhận.
+    - Span nằm BÊN TRONG một `{` (dạng mở object) còn mở khi text kết thúc (output bị cắt) → KHÔNG nhận.
+      `{` văn xuôi phía trước ("dùng {name}", "ký tự { mở") không tính → JSON hoàn chỉnh sau đó vẫn nhận.
     - Span nằm trong object đã decode được → bỏ (object con không thành ứng viên riêng).
     - Decode lỗi / RecursionError (lồng quá sâu) → coi như span hỏng, thử span kế (có thể là object con).
     - Quá `max_candidates` lần decode → JSONDecodeError (output bất thường)."""

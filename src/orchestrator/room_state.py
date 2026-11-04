@@ -135,10 +135,11 @@ ESCALATION_RESOLVE = ("retry", "backtrack", "abandon")
 TERMINAL_STATES = ("RELEASED", "ESCALATED", "ABANDONED")
 
 
-def live_window_s(root=None) -> float:
-    """eventstore.live_window_s (config/runtime.yaml) — ASSIGN cũ hơn mức này không còn tính 'working'."""
+def assign_stale_s(root=None) -> float:
+    """eventstore.assign_stale_s (config/runtime.yaml) — ASSIGN cũ hơn mức này không còn tính 'working'.
+    Khác live_window_s (nghĩa "dự án live"): lượt gọi model có thể kéo dài vài phút."""
     from src.blackboard import eventstore
-    return float(config.require(eventstore.settings(root), "live_window_s", eventstore.RUNTIME))
+    return float(config.require(eventstore.settings(root), "assign_stale_s", eventstore.RUNTIME))
 
 
 def step_status(board, *, state: str | None = None, now: float | None = None,
@@ -147,7 +148,7 @@ def step_status(board, *, state: str | None = None, now: float | None = None,
     ASSIGN chưa có RESULT/BLOCKED → working; BLOCKED cuối → blocked (tới ASSIGN kế tiếp hoặc người gỡ
     ESCALATED); RESULT → hết (idle).
     'working' bị bỏ (review PR #2 — process chết giữa chừng không để agent 'đang làm' mãi) khi: `state` là
-    state chờ gate / terminal, hoặc ASSIGN cũ hơn `window_s` so với `now` (truyền cả hai mới xét)."""
+    state chờ gate / terminal, hoặc ASSIGN cũ hơn `window_s` (eventstore.assign_stale_s) so với `now` (truyền cả hai mới xét)."""
     st: dict = {}
     since: dict = {}
     for e in board.get("trace_log") or []:
@@ -189,7 +190,7 @@ def snapshot(board, *, active=(), gate: dict | None = None, levels: dict | None 
     """Payload GET /api/room. `active`: agent đang chạy bước hiện tại (caller biết, vd dashboard demo);
     `gate`: {id, agents} khi đang chờ người ký; `levels`: agent → 'L0'..'L2' (Autonomy, nếu có);
     `meta`: kết quả agent_meta() dựng sẵn (không thì đọc specs).
-    `now`/`window_s`: mốc xét ASSIGN quá hạn (mặc định time.time() / eventstore.live_window_s); state lấy từ
+    `now`/`window_s`: mốc xét ASSIGN quá hạn (mặc định time.time() / eventstore.assign_stale_s); state lấy từ
     project_status.state của board."""
     ts = tasks(board)
     evs = events(board)
@@ -199,7 +200,7 @@ def snapshot(board, *, active=(), gate: dict | None = None, levels: dict | None 
     risk_blocked = _risk_blocked_agents(board)
     state = (board.get("project_status") or {}).get("state")
     steps = step_status(board, state=state, now=time.time() if now is None else now,
-                        window_s=live_window_s(root) if window_s is None else window_s)
+                        window_s=assign_stale_s(root) if window_s is None else window_s)
     agents = []
     for a in (meta if meta is not None else _agent_meta(root)):
         mine = [t for t in ts if t["owner_agent"] == a["id"] and t["status"] in (*WORKER_STATES, BLOCKED)]

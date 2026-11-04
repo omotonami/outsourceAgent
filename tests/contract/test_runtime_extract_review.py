@@ -58,10 +58,18 @@ def test_quotes_and_braces_in_strings_and_prose():
     assert runtime._extract_json(t, SCHEMA) == {"stories": ["a } b { \" c"]}
 
 
-def test_stray_unclosed_brace_before_json_is_parse_error_not_guess():
-    # `{` lẻ không đóng ở văn bản trước JSON: không phân biệt được với output bị cắt → không nhận, retry
+@pytest.mark.parametrize("prose", ['ký tự { mở rồi ', 'dùng {name} để điền, ', 'mở { rồi đóng } ',
+                                   'ngoặc lẻ { và "trích dẫn lẻ ', '{{ template '])
+def test_stray_prose_brace_before_complete_json_accepted(prose):
+    assert runtime._extract_json(prose + '{"stories":[1]}', SCHEMA) == {"stories": [1]}
+
+
+@pytest.mark.parametrize("text", ['Kết quả: {"result": {"stories":[1]}, "note": "bị cắ',
+                                  'dùng {name}: {"wrap": {"stories":[1]}, "x": [1, 2',
+                                  '{ "outer": {"stories":[1]}'])
+def test_truly_truncated_output_still_rejected(text):
     with pytest.raises(json.JSONDecodeError):
-        runtime._extract_json('ký tự { mở rồi {"stories":[1]}', SCHEMA)
+        runtime._extract_json(text, SCHEMA)
 
 
 # ---------- hiệu năng / trần ----------
@@ -99,7 +107,7 @@ def test_candidate_and_length_limits_from_config(monkeypatch):
     with pytest.raises(json.JSONDecodeError, match="quá dài"):
         runtime._extract_json('{"stories":[]}' + " " * 60, SCHEMA)
     with pytest.raises(json.JSONDecodeError, match="quá nhiều ứng viên"):
-        runtime._extract_json("{x}{y}{z}{w}", SCHEMA)
+        runtime._extract_json('{"x"}{"y"}{"z"}{"w"}', SCHEMA)
 
 
 def test_extract_limits_validation(tmp_path):

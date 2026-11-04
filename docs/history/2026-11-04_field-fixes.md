@@ -128,7 +128,7 @@ Reviewer chứng minh bằng script (`/tmp/soi3/t_extract.py`, `t_msg.py`, `t_wh
 | 5 | `confirm`: bỏ ký tự Unicode Cf trước NFKC; tách thêm `@` `/`; thêm id máy cố định (claude, claude-code, assistant, bot, chief, chief-ops) + `config/governance.yaml` (`confirm.machine_ids_extra`: soi, va, chief-of-staff); dạng viết liền/tách rời của mọi id máy (c1dev, gateui, "orch estrator") sinh tự động. Docstring + config ghi rõ: lớp chống dùng nhầm, KHÔNG phải xác thực | `src/governance/confirm.py`, `config/governance.yaml` (mới) |
 | 6 | `.claude/settings.json`: pytest chỉ allow đúng `pytest -q tests/` / `python -m pytest -q tests/` (khác → hỏi người, mặc định); `Edit/Write(tests/**)` → ask; deny `git diff --no-index*`. Runbook: mục "Quyền Claude — chỉ là lớp PHỤ" | `.claude/settings.json`, `docs/ops/runbook-daily.md` |
 | 7 | Server: MỌI request ghi (POST/PUT/PATCH/DELETE, gồm gate dự án, escalation, demo) phải `Content-Type: application/json` (415) và Host (+ Origin nếu có) là localhost/127.0.0.1/::1 hoặc `dashboard.allowed_hosts` (403); thiếu Origin chỉ qua khi Host hợp lệ. UI demo gửi JSON | `src/server/app.py`, `src/server/static/index.html`, `config/runtime.yaml` |
-| 8 | Phòng 3D: `working` của bước phase bị bỏ khi state là gate/terminal hoặc ASSIGN cũ hơn `eventstore.live_window_s` (process chết giữa chừng không kẹt "đang làm"); replay frame xét theo `ts` của dòng | `src/orchestrator/room_state.py`, `src/orchestrator/room_stream.py` |
+| 8 | Phòng 3D: `working` của bước phase bị bỏ khi state là gate/terminal hoặc ASSIGN cũ hơn `eventstore.assign_stale_s` (process chết giữa chừng không kẹt "đang làm"); replay frame xét theo `ts` của dòng | `src/orchestrator/room_state.py`, `src/orchestrator/room_stream.py` |
 | 9 | Gỡ ESCALATED khi không rõ `from_state` (dữ liệu cũ): chỉ `backtrack` tới phase mà mọi gate phía trước đã ký (options + resolve cùng luật) | `src/ops/escalation.py` |
 | 10 | `Orchestrator.escalate` gắn `kind: "escalation"`; escalation/pipeline chọn risk theo kind (dữ liệu cũ không có kind: source_agent orchestrator và không có `phase` — risk scanner stub không bị chọn nhầm) | `src/orchestrator/state_machine.py`, `src/orchestrator/team_feed.py`, `src/ops/escalation.py`, `src/ops/pipeline.py` |
 
@@ -137,10 +137,14 @@ Test mới: `tests/contract/test_runtime_extract_review.py`, `tests/contract/tes
 `test_ops_escalation.py`. Test cũ chỉnh hạ tầng: TestClient `base_url="http://localhost"`, body không phải JSON gửi kèm
 `Content-Type: application/json` (để vẫn kiểm 400), fake config giữ khoá `agent_runtime` khác.
 
-Số test sau review: **668** (545 + 123). `agent_lint --all` 14/14, `history_check --base origin/main` PASS.
+Chốt của Chief of Staff (sau báo cáo đầu):
+- Tách khoá `eventstore.assign_stale_s` (600 s, `config/runtime.yaml`) cho việc bỏ "working" khi ASSIGN quá hạn;
+  `live_window_s` giữ nghĩa "dự án live". Test: lượt gọi 120 s vẫn hiện working.
+- `{` văn xuôi không làm cả output bị coi là cắt: khi cân ngoặc chỉ tính `{` mở được object JSON (ký tự không-trắng
+  kế tiếp là `"` hoặc `}`). "dùng {name} …", "ký tự { mở …" rồi JSON hoàn chỉnh → nhận; ứng viên nằm trong `{"…`
+  còn mở khi text kết thúc → vẫn không nhận.
+
+Số test sau review: **676** (545 + 131). `agent_lint --all` 14/14, `history_check --base origin/main` PASS.
 
 Việc còn mở (chủ repo quyết):
-- `live_window_s` (30 s) dùng chung cho "project live" và "ASSIGN quá hạn": lượt gọi model > 30 s sẽ hiện idle trên
-  snapshot dù process còn chạy — nếu cần, tách khoá riêng (vd `step_working_window_s`).
 - SSE chỉ phát frame khi có dòng mới; process chết thì client SSE chỉ thấy idle sau khi tải lại snapshot.
-- `{` lẻ không đóng trong văn bản TRƯỚC JSON → không nhận (không phân biệt được với output bị cắt) → retry.

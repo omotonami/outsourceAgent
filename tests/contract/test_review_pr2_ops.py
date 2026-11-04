@@ -109,15 +109,19 @@ def test_room_working_dropped_when_assign_stale_process_died():
     b = _board_with_assign(now - 3600)                 # process chết: ASSIGN không bao giờ có RESULT
     assert room_state.step_status(b) == {"a1_bu": "working"}
     assert room_state.step_status(b, now=now, window_s=30) == {}
-    a = {x["id"]: x["status"] for x in room_state.snapshot(b, window_s=30)["agents"]}
+    a = {x["id"]: x["status"] for x in room_state.snapshot(b)["agents"]}           # mặc định assign_stale_s
     assert a["a1_bu"] == "idle"
-    fresh = _board_with_assign(now - 1)
-    a = {x["id"]: x["status"] for x in room_state.snapshot(fresh, window_s=30)["agents"]}
+
+
+def test_room_long_model_call_120s_still_working():
+    b = _board_with_assign(time.time() - 120)          # > live_window_s (30) nhưng < assign_stale_s (600)
+    a = {x["id"]: x["status"] for x in room_state.snapshot(b)["agents"]}
     assert a["a1_bu"] == "working"
 
 
-def test_room_window_default_from_config():
-    assert room_state.live_window_s() == 30.0
+def test_room_stale_key_separate_from_live_window():
+    from src.blackboard import eventstore
+    assert room_state.assign_stale_s() == 600.0 and float(eventstore.settings()["live_window_s"]) == 30.0
 
 
 @pytest.mark.parametrize("state", ["AWAIT_G1", "RELEASED", "ESCALATED", "ABANDONED"])

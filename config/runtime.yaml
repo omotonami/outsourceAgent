@@ -8,6 +8,7 @@ eventstore:
   poll_ms: 300             # SSE /api/room/stream đọc store mỗi poll_ms
   heartbeat_s: 15          # SSE gửi comment giữ kết nối
   live_window_s: 30        # project có ghi trong N giây gần nhất → "live" trên /api/projects
+  assign_stale_s: 600      # Phòng 3D: ASSIGN bước phase chưa có RESULT/BLOCKED quá N giây → bỏ "working" (process chết)
 # Runtime agent (src/agents/runtime.py). Output model sai JSON/schema → gọi lại tối đa schema_retries lần
 # (tổng lượt = 1 + schema_retries) với thông báo lỗi khoá gốc rõ ràng; vẫn sai → SCHEMA_FAIL → ESCALATED.
 agent_runtime:
